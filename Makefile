@@ -22,7 +22,9 @@ INC_DIR		= include
 OBJ_DIR		= obj
 
 # ソースファイル
-SRCS		= $(SRC_DIR)/main.cpp
+SRCS		= $(SRC_DIR)/main.cpp \
+			  $(SRC_DIR)/Config.cpp \
+			  $(SRC_DIR)/ConfigParser.cpp
 
 # オブジェクトファイル
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
