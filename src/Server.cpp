@@ -116,6 +116,8 @@ void Server::eventLoop() {
 	std::cout << "\n=== Event Loop Started ===" << std::endl;
 	
 	int eventCount = 0;
+	time_t lastTimeoutCheck = std::time(NULL);
+	const int CLIENT_TIMEOUT = 30; // 30秒のタイムアウト
 	
 	while (_running && g_running) {
 		// poll() で待機（タイムアウト: 1000ms = 1秒）
@@ -128,6 +130,12 @@ void Server::eventLoop() {
 		
 		if (ret == 0) {
 			// タイムアウト（イベントなし）
+			// 定期的にクライアントのタイムアウトをチェック
+			time_t now = std::time(NULL);
+			if (now - lastTimeoutCheck >= 5) { // 5秒ごとにチェック
+				checkClientTimeouts(CLIENT_TIMEOUT);
+				lastTimeoutCheck = now;
+			}
 			continue;
 		}
 		
@@ -307,6 +315,27 @@ void Server::handleClientRead(int clientFd) {
 			// レスポンス生成
 			HttpResponse response;
 			
+			// keep-alive の判定（全てのレスポンスタイプで共通）
+			bool keepAlive = false;
+			std::map<std::string, std::string>::const_iterator connIt = req.headers.find("connection");
+			
+			if (req.httpVersion == "HTTP/1.1") {
+				// HTTP/1.1 はデフォルトで keep-alive
+				keepAlive = true;
+				if (connIt != req.headers.end() && connIt->second == "close") {
+					keepAlive = false;
+				}
+			} else {
+				// HTTP/1.0 はデフォルトで close
+				keepAlive = false;
+				if (connIt != req.headers.end() && connIt->second == "keep-alive") {
+					keepAlive = true;
+				}
+			}
+			
+			// ClientConnection に keep-alive フラグを設定
+			client->setKeepAlive(keepAlive);
+			
 			if (!serverConfig) {
 				// サーバーが見つからない（通常は発生しない）
 				response = ErrorPageManager::makeErrorResponse(500, NULL, "Internal Server Error");
@@ -348,6 +377,13 @@ void Server::handleClientRead(int clientFd) {
 			} else {
 				// その他のメソッドは未実装
 				response = ErrorPageManager::makeErrorResponse(501, serverConfig, "Not Implemented");
+			}
+			
+			// レスポンスに Connection ヘッダーを追加
+			if (client->isKeepAlive()) {
+				response.setHeader("Connection", "keep-alive");
+			} else {
+				response.setHeader("Connection", "close");
 			}
 			
 			// レスポンスをシリアライズして送信バッファに設定
@@ -405,9 +441,24 @@ void Server::handleClientWrite(int clientFd) {
 		if (client->getSendBuffer().empty()) {
 			std::cout << "✅ Response sent completely to client (fd: " << clientFd << ")" << std::endl;
 			
-			// TODO: keep-alive のチェック
-			// 今は接続を閉じる
-			closeClient(clientFd);
+			// keep-alive のチェック
+			if (client->isKeepAlive()) {
+				// keep-alive: 接続を保持して次のリクエストを待つ
+				std::cout << "🔄 Keep-alive: waiting for next request (fd: " << clientFd << ")" << std::endl;
+				
+				// パーサーをリセット
+				client->getParser().reset();
+				
+				// 状態をREADINGに戻す
+				client->setState(ClientConnection::READING);
+				
+				// pollerをPOLLINに変更
+				_poller.modify(clientFd, POLLIN);
+			} else {
+				// Connection: close - 接続を閉じる
+				std::cout << "🔚 Connection: close (fd: " << clientFd << ")" << std::endl;
+				closeClient(clientFd);
+			}
 		}
 	} else if (n < 0) {
 		// エラー（EAGAINやEWOULDBLOCKは正常）
@@ -429,6 +480,27 @@ void Server::closeClient(int clientFd) {
 	_clients.erase(it);
 	
 	std::cout << "❌ Client connection closed (fd: " << clientFd << ")" << std::endl;
+}
+
+void Server::checkClientTimeouts(int timeoutSeconds) {
+	time_t now = std::time(NULL);
+	std::vector<int> toClose;
+	
+	// タイムアウトしたクライアントを見つける
+	for (std::map<int, ClientConnection*>::iterator it = _clients.begin();
+	     it != _clients.end(); ++it) {
+		time_t lastActivity = it->second->getLastActivity();
+		if (now - lastActivity >= timeoutSeconds) {
+			std::cout << "⏰ Client timeout (fd: " << it->first 
+			          << ", idle: " << (now - lastActivity) << "s)" << std::endl;
+			toClose.push_back(it->first);
+		}
+	}
+	
+	// タイムアウトしたクライアントを閉じる
+	for (size_t i = 0; i < toClose.size(); ++i) {
+		closeClient(toClose[i]);
+	}
 }
 
 void Server::cleanup() {

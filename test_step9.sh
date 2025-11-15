@@ -43,7 +43,7 @@ test_result() {
 echo "=== 1. Python CGI (GET) ==="
 
 echo -n "Test 1: Python CGI responds with 200 OK ... "
-RESPONSE=$(curl -s http://$HOST:$PORT/cgi-bin/test.py -w "\n%{http_code}")
+RESPONSE=$(curl -s -H "Connection: close" http://$HOST:$PORT/cgi-bin/test.py -w "\n%{http_code}")
 STATUS=$(echo "$RESPONSE" | tail -n 1)
 BODY=$(echo "$RESPONSE" | sed '$d')
 echo "$RESPONSE" > /tmp/test1_cgi_response.txt
@@ -63,7 +63,7 @@ echo "$BODY" | grep -q "REQUEST_METHOD.*GET"
 test_result
 
 echo -n "Test 5: Content-Type is text/html ... "
-curl -s -i http://$HOST:$PORT/cgi-bin/test.py | grep -i "Content-Type:" | grep -q "text/html"
+curl -s -i -H "Connection: close" http://$HOST:$PORT/cgi-bin/test.py | grep -i "Content-Type:" | grep -q "text/html"
 test_result
 
 # ==========================================
@@ -74,7 +74,7 @@ echo
 echo "=== 2. Python CGI with Query String ==="
 
 echo -n "Test 6: CGI with query string ... "
-RESPONSE=$(curl -s "http://$HOST:$PORT/cgi-bin/test.py?name=webserv&version=1.0")
+RESPONSE=$(curl -s -H "Connection: close" "http://$HOST:$PORT/cgi-bin/test.py?name=webserv&version=1.0")
 echo "$RESPONSE" | grep -q "QUERY_STRING.*name=webserv"
 test_result
 
@@ -90,7 +90,7 @@ echo
 echo "=== 3. Python CGI (POST) ==="
 
 echo -n "Test 8: POST request to CGI ... "
-RESPONSE=$(curl -s -X POST http://$HOST:$PORT/cgi-bin/test.py \
+RESPONSE=$(curl -s -X POST -H "Connection: close" http://$HOST:$PORT/cgi-bin/test.py \
     -d "test=data&foo=bar")
 echo "$RESPONSE" > /tmp/test8_cgi_response.txt
 echo "$RESPONSE" | grep -q "REQUEST_METHOD.*POST"
@@ -112,13 +112,13 @@ echo
 echo "=== 4. CGI Error Handling ==="
 
 echo -n "Test 11: Non-existent CGI script returns 404 ... "
-RESPONSE=$(curl -s http://$HOST:$PORT/cgi-bin/nonexistent.py -w "\n%{http_code}")
+RESPONSE=$(curl -s -H "Connection: close" http://$HOST:$PORT/cgi-bin/nonexistent.py -w "\n%{http_code}")
 STATUS=$(echo "$RESPONSE" | tail -n 1)
 [ "$STATUS" = "404" ]
 test_result
 
 echo -n "Test 12: CGI on non-CGI path returns 200 (static file) or 404 ... "
-RESPONSE=$(curl -s http://$HOST:$PORT/test.py -w "\n%{http_code}")
+RESPONSE=$(curl -s -H "Connection: close" http://$HOST:$PORT/test.py -w "\n%{http_code}")
 STATUS=$(echo "$RESPONSE" | tail -n 1)
 [ "$STATUS" = "404" ] || [ "$STATUS" = "200" ]
 test_result
@@ -131,7 +131,7 @@ echo
 echo "=== 5. CGI Environment Variables ==="
 
 echo -n "Test 13: SCRIPT_FILENAME is set ... "
-RESPONSE=$(curl -s http://$HOST:$PORT/cgi-bin/test.py)
+RESPONSE=$(curl -s -H "Connection: close" http://$HOST:$PORT/cgi-bin/test.py)
 echo "$RESPONSE" | grep -q "SCRIPT_FILENAME"
 test_result
 
@@ -140,7 +140,7 @@ echo "$RESPONSE" | grep -q "SERVER_PROTOCOL"
 test_result
 
 echo -n "Test 15: CONTENT_LENGTH is set for POST ... "
-RESPONSE=$(curl -s -X POST http://$HOST:$PORT/cgi-bin/test.py -d "test")
+RESPONSE=$(curl -s -X POST -H "Connection: close" http://$HOST:$PORT/cgi-bin/test.py -d "test")
 echo "$RESPONSE" | grep -q "CONTENT_LENGTH.*[1-9]"
 test_result
 

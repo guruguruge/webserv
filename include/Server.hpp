@@ -36,6 +36,7 @@ private:
 	void handleClientRead(int clientFd);
 	void handleClientWrite(int clientFd);
 	void closeClient(int clientFd);
+	void checkClientTimeouts(int timeoutSeconds);
 	
 	void cleanup();
 

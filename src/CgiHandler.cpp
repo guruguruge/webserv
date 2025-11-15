@@ -27,6 +27,14 @@ bool CgiHandler::startCgi(
     if (stat(scriptPath.c_str(), &st) != 0) {
         std::cerr << "❌ CGI script not found: " << scriptPath << std::endl;
         HttpResponse response = ErrorPageManager::makeErrorResponse(404, &server, "CGI script not found");
+        
+        // Connectionヘッダーを追加
+        if (client.isKeepAlive()) {
+            response.setHeader("Connection", "keep-alive");
+        } else {
+            response.setHeader("Connection", "close");
+        }
+        
         client.getSendBuffer() = response.serialize();
         client.setState(ClientConnection::WRITING);
         return false;
@@ -39,6 +47,14 @@ bool CgiHandler::startCgi(
     if (pipe(pipeStdin) < 0 || pipe(pipeStdout) < 0) {
         std::cerr << "❌ Failed to create pipes for CGI" << std::endl;
         HttpResponse response = ErrorPageManager::makeErrorResponse(500, &server, "Failed to create pipes");
+        
+        // Connectionヘッダーを追加
+        if (client.isKeepAlive()) {
+            response.setHeader("Connection", "keep-alive");
+        } else {
+            response.setHeader("Connection", "close");
+        }
+        
         client.getSendBuffer() = response.serialize();
         client.setState(ClientConnection::WRITING);
         return false;
@@ -55,6 +71,14 @@ bool CgiHandler::startCgi(
         close(pipeStdout[0]);
         close(pipeStdout[1]);
         HttpResponse response = ErrorPageManager::makeErrorResponse(500, &server, "Failed to fork");
+        
+        // Connectionヘッダーを追加
+        if (client.isKeepAlive()) {
+            response.setHeader("Connection", "keep-alive");
+        } else {
+            response.setHeader("Connection", "close");
+        }
+        
         client.getSendBuffer() = response.serialize();
         client.setState(ClientConnection::WRITING);
         return false;
@@ -131,6 +155,14 @@ bool CgiHandler::onCgiStdoutReadable(ClientConnection& client) {
         
         // CGI出力をHTTPレスポンスに変換
         HttpResponse response = parseCgiOutput(client.getCgiOutputBuffer());
+        
+        // Connectionヘッダーを追加
+        if (client.isKeepAlive()) {
+            response.setHeader("Connection", "keep-alive");
+        } else {
+            response.setHeader("Connection", "close");
+        }
+        
         client.getSendBuffer() = response.serialize();
         client.setState(ClientConnection::WRITING);
         
@@ -152,6 +184,14 @@ bool CgiHandler::onCgiStdoutReadable(ClientConnection& client) {
         response.setStatusCode(502);
         response.setReasonPhrase("Bad Gateway");
         response.setBody("CGI read error");
+        
+        // Connectionヘッダーを追加
+        if (client.isKeepAlive()) {
+            response.setHeader("Connection", "keep-alive");
+        } else {
+            response.setHeader("Connection", "close");
+        }
+        
         client.getSendBuffer() = response.serialize();
         client.setState(ClientConnection::WRITING);
         
