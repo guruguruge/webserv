@@ -14,6 +14,7 @@
 #include "Router.hpp"
 #include "StaticFileHandler.hpp"
 #include "UploadHandler.hpp"
+#include "CgiHandler.hpp"
 #include "ErrorPageManager.hpp"
 #include <iostream>
 #include <sstream>
@@ -168,13 +169,35 @@ void Server::handlePollEvent(const struct pollfd& pfd) {
 			closeClient(pfd.fd);
 		}
 	} else {
-		// その他のエラー
-		if (pfd.revents & POLLERR) {
-			std::cerr << "⚠️  POLLERR on fd: " << pfd.fd << std::endl;
-		} else if (pfd.revents & POLLHUP) {
-			std::cerr << "⚠️  POLLHUP on fd: " << pfd.fd << std::endl;
-		} else if (pfd.revents & POLLNVAL) {
-			std::cerr << "⚠️  POLLNVAL on fd: " << pfd.fd << std::endl;
+		// CGI stdout fd かどうかをチェック
+		bool isCgiFd = false;
+		for (std::map<int, ClientConnection*>::iterator it = _clients.begin();
+		     it != _clients.end(); ++it) {
+			if (it->second->getCgiStdoutFd() == pfd.fd) {
+				isCgiFd = true;
+				if (pfd.revents & POLLIN) {
+					// CGI stdout が読み取り可能
+					bool finished = CgiHandler::onCgiStdoutReadable(*it->second);
+					if (finished) {
+						// CGI完了 - stdout fd を poller から削除
+						_poller.remove(pfd.fd);
+						// クライアントfdをPOLLOUTで再度追加（CGI開始時に削除されている）
+						_poller.add(it->first, POLLOUT);
+					}
+				}
+				break;
+			}
+		}
+		
+		if (!isCgiFd) {
+			// その他のエラー
+			if (pfd.revents & POLLERR) {
+				std::cerr << "⚠️  POLLERR on fd: " << pfd.fd << std::endl;
+			} else if (pfd.revents & POLLHUP) {
+				std::cerr << "⚠️  POLLHUP on fd: " << pfd.fd << std::endl;
+			} else if (pfd.revents & POLLNVAL) {
+				std::cerr << "⚠️  POLLNVAL on fd: " << pfd.fd << std::endl;
+			}
 		}
 	}
 }
@@ -266,12 +289,53 @@ void Server::handleClientRead(int clientFd) {
 				std::cout << "   Location: " << (locationConfig ? locationConfig->path : "(none)") << std::endl;
 			}
 			
+			// CGI拡張子チェック
+			bool isCgi = false;
+			if (locationConfig && !locationConfig->cgiExtension.empty()) {
+				size_t dotPos = req.path.find_last_of('.');
+				if (dotPos != std::string::npos) {
+					std::string ext = req.path.substr(dotPos);
+					std::cout << "🔍 Checking CGI: ext=" << ext 
+					          << ", cgiExtension=" << locationConfig->cgiExtension << std::endl;
+					if (ext == locationConfig->cgiExtension) {
+						isCgi = true;
+						std::cout << "✅ CGI match!" << std::endl;
+					}
+				}
+			}
+			
 			// レスポンス生成
 			HttpResponse response;
 			
 			if (!serverConfig) {
 				// サーバーが見つからない（通常は発生しない）
 				response = ErrorPageManager::makeErrorResponse(500, NULL, "Internal Server Error");
+			} else if (isCgi) {
+				// CGIで処理
+				bool cgiStarted = CgiHandler::startCgi(*client, req, *serverConfig, *locationConfig);
+				
+				if (!cgiStarted) {
+					// CGI開始失敗(404など) - 既にエラーレスポンスが設定されている
+					// 受信バッファをクリア
+					recvBuf.clear();
+					// クライアントをPOLLOUTに変更してレスポンス送信
+					_poller.modify(clientFd, POLLOUT);
+					return;
+				}
+				
+				// CGI処理中なので、ここではreturn (レスポンス生成しない)
+				// 受信バッファをクリア
+				recvBuf.clear();
+				
+				// クライアントfdをpollerから一時的に削除（CGI完了後に再度POLLOUTで追加）
+				_poller.remove(clientFd);
+				
+				// CGI stdout fd を poller に追加
+				int cgiStdoutFd = client->getCgiStdoutFd();
+				if (cgiStdoutFd >= 0) {
+					_poller.add(cgiStdoutFd, POLLIN);
+				}
+				return;
 			} else if (req.method == "GET" || req.method == "HEAD") {
 				// 静的ファイルハンドラーで処理
 				response = StaticFileHandler::handleGet(req, *serverConfig, locationConfig);
