@@ -3,6 +3,7 @@
 #include "MimeType.hpp"
 #include <sys/stat.h>
 #include <dirent.h>
+#include <unistd.h>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -278,4 +279,54 @@ std::vector<std::string> StaticFileHandler::listDirectory(const std::string& dir
     
     closedir(dir);
     return entries;
+}
+
+HttpResponse StaticFileHandler::handleDelete(
+    const HttpRequest& request,
+    const ServerConfig& serverConfig,
+    const LocationConfig* locationConfig
+) {
+    // ロケーション設定がない場合はエラー
+    if (!locationConfig) {
+        return ErrorPageManager::makeErrorResponse(404, &serverConfig, "Not Found");
+    }
+    
+    // allowed_methodsのチェック
+    bool methodAllowed = false;
+    for (size_t i = 0; i < locationConfig->allowedMethods.size(); ++i) {
+        if (locationConfig->allowedMethods[i] == "DELETE") {
+            methodAllowed = true;
+            break;
+        }
+    }
+    
+    if (!methodAllowed) {
+        return ErrorPageManager::makeErrorResponse(405, &serverConfig, "Method Not Allowed");
+    }
+    
+    // 実ファイルパスを構築
+    std::string filePath = buildFilePath(locationConfig, request.path);
+    
+    // ファイルの存在確認
+    if (!fileExists(filePath)) {
+        return ErrorPageManager::makeErrorResponse(404, &serverConfig, "Not Found");
+    }
+    
+    // ディレクトリの場合はエラー
+    if (isDirectory(filePath)) {
+        return ErrorPageManager::makeErrorResponse(403, &serverConfig, "Cannot delete directory");
+    }
+    
+    // ファイルを削除
+    if (unlink(filePath.c_str()) != 0) {
+        return ErrorPageManager::makeErrorResponse(500, &serverConfig, "Failed to delete file");
+    }
+    
+    // 204 No Content を返す
+    HttpResponse response;
+    response.setStatusCode(204);
+    response.setReasonPhrase("No Content");
+    response.setHeader("Server", "webserv/1.0");
+    
+    return response;
 }

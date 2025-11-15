@@ -13,6 +13,7 @@
 #include "Server.hpp"
 #include "Router.hpp"
 #include "StaticFileHandler.hpp"
+#include "UploadHandler.hpp"
 #include "ErrorPageManager.hpp"
 #include <iostream>
 #include <sstream>
@@ -274,6 +275,12 @@ void Server::handleClientRead(int clientFd) {
 			} else if (req.method == "GET" || req.method == "HEAD") {
 				// 静的ファイルハンドラーで処理
 				response = StaticFileHandler::handleGet(req, *serverConfig, locationConfig);
+			} else if (req.method == "POST") {
+				// アップロードハンドラーで処理
+				response = UploadHandler::handlePost(req, *serverConfig, locationConfig);
+			} else if (req.method == "DELETE") {
+				// 静的ファイルハンドラーで削除処理
+				response = StaticFileHandler::handleDelete(req, *serverConfig, locationConfig);
 			} else {
 				// その他のメソッドは未実装
 				response = ErrorPageManager::makeErrorResponse(501, serverConfig, "Not Implemented");

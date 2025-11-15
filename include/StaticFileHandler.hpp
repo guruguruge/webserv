@@ -31,6 +31,20 @@ public:
         const LocationConfig* locationConfig
     );
 
+    /**
+     * DELETEリクエストを処理してレスポンスを生成
+     * 
+     * @param request HTTPリクエスト
+     * @param serverConfig サーバー設定
+     * @param locationConfig ロケーション設定
+     * @return HTTPレスポンス
+     */
+    static HttpResponse handleDelete(
+        const HttpRequest& request,
+        const ServerConfig& serverConfig,
+        const LocationConfig* locationConfig
+    );
+
 private:
     /**
      * 実ファイルパスを構築
