@@ -1,4 +1,5 @@
 #include "StaticFileHandler.hpp"
+#include "ErrorPageManager.hpp"
 #include "MimeType.hpp"
 #include <sys/stat.h>
 #include <dirent.h>
@@ -11,16 +12,14 @@ HttpResponse StaticFileHandler::handleGet(
     const ServerConfig& serverConfig,
     const LocationConfig* locationConfig
 ) {
-    (void)serverConfig; // 将来のエラーページ処理で使用
-    
     // メソッドチェック
     if (request.method != "GET" && request.method != "HEAD") {
-        return makeErrorResponse(405, "Method Not Allowed");
+        return ErrorPageManager::makeErrorResponse(405, &serverConfig, "Method Not Allowed");
     }
     
     // ロケーション設定がない場合はエラー
     if (!locationConfig) {
-        return makeErrorResponse(404, "Not Found");
+        return ErrorPageManager::makeErrorResponse(404, &serverConfig, "Not Found");
     }
     
     // allowed_methodsのチェック
@@ -39,7 +38,7 @@ HttpResponse StaticFileHandler::handleGet(
     }
     
     if (!methodAllowed) {
-        return makeErrorResponse(405, "Method Not Allowed");
+        return ErrorPageManager::makeErrorResponse(405, &serverConfig, "Method Not Allowed");
     }
     
     // 実ファイルパスを構築
@@ -47,7 +46,7 @@ HttpResponse StaticFileHandler::handleGet(
     
     // ファイル/ディレクトリの存在確認
     if (!fileExists(filePath)) {
-        return makeErrorResponse(404, "Not Found");
+        return ErrorPageManager::makeErrorResponse(404, &serverConfig, "Not Found");
     }
     
     // ディレクトリの場合
@@ -77,7 +76,7 @@ HttpResponse StaticFileHandler::handleGet(
                     
                     return response;
                 } else {
-                    return makeErrorResponse(500, "Internal Server Error");
+                    return ErrorPageManager::makeErrorResponse(500, &serverConfig, "Internal Server Error");
                 }
             }
         }
@@ -101,13 +100,13 @@ HttpResponse StaticFileHandler::handleGet(
         }
         
         // autoindexが無効なら403
-        return makeErrorResponse(403, "Forbidden");
+        return ErrorPageManager::makeErrorResponse(403, &serverConfig, "Forbidden");
     }
     
     // 通常のファイル
     std::string content;
     if (!readFile(filePath, content)) {
-        return makeErrorResponse(500, "Internal Server Error");
+        return ErrorPageManager::makeErrorResponse(500, &serverConfig, "Internal Server Error");
     }
     
     HttpResponse response;
@@ -279,29 +278,4 @@ std::vector<std::string> StaticFileHandler::listDirectory(const std::string& dir
     
     closedir(dir);
     return entries;
-}
-
-HttpResponse StaticFileHandler::makeErrorResponse(int statusCode, const std::string& message) {
-    HttpResponse response;
-    response.setStatusCode(statusCode);
-    
-    std::ostringstream body;
-    body << "<!DOCTYPE html>\n";
-    body << "<html>\n";
-    body << "<head><title>" << statusCode << " " << response.getReasonPhrase() << "</title></head>\n";
-    body << "<body>\n";
-    body << "<h1>" << statusCode << " " << response.getReasonPhrase() << "</h1>\n";
-    body << "<p>" << message << "</p>\n";
-    body << "</body>\n";
-    body << "</html>\n";
-    
-    response.setHeader("Content-Type", "text/html");
-    
-    std::ostringstream oss;
-    oss << body.str().size();
-    response.setHeader("Content-Length", oss.str());
-    
-    response.setBody(body.str());
-    
-    return response;
 }

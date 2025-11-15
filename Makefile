@@ -34,7 +34,8 @@ SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/HttpResponse.cpp \
 			  $(SRC_DIR)/Router.cpp \
 			  $(SRC_DIR)/StaticFileHandler.cpp \
-			  $(SRC_DIR)/MimeType.cpp
+			  $(SRC_DIR)/MimeType.cpp \
+			  $(SRC_DIR)/ErrorPageManager.cpp
 
 # オブジェクトファイル
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)

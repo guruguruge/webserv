@@ -13,6 +13,7 @@
 #include "Server.hpp"
 #include "Router.hpp"
 #include "StaticFileHandler.hpp"
+#include "ErrorPageManager.hpp"
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
@@ -269,15 +270,13 @@ void Server::handleClientRead(int clientFd) {
 			
 			if (!serverConfig) {
 				// サーバーが見つからない（通常は発生しない）
-				response.setStatusCode(500);
-				response.setBody("Internal Server Error");
+				response = ErrorPageManager::makeErrorResponse(500, NULL, "Internal Server Error");
 			} else if (req.method == "GET" || req.method == "HEAD") {
 				// 静的ファイルハンドラーで処理
 				response = StaticFileHandler::handleGet(req, *serverConfig, locationConfig);
 			} else {
 				// その他のメソッドは未実装
-				response.setStatusCode(501);
-				response.setBody("Not Implemented");
+				response = ErrorPageManager::makeErrorResponse(501, serverConfig, "Not Implemented");
 			}
 			
 			// レスポンスをシリアライズして送信バッファに設定
@@ -297,13 +296,11 @@ void Server::handleClientRead(int clientFd) {
 			std::cerr << "❌ HTTP parse error: " << parser.getErrorMessage() << std::endl;
 			
 			// 400 Bad Request を返す
-			std::string response = "HTTP/1.1 400 Bad Request\r\n"
-			                       "Content-Type: text/plain\r\n"
-			                       "Content-Length: 11\r\n"
-			                       "\r\n"
-			                       "Bad Request";
+			// サーバー設定を取得して、カスタムエラーページを使用
+			const ServerConfig* serverConfig = Router::findServer(_config, parser.getRequest());
+			HttpResponse response = ErrorPageManager::makeErrorResponse(400, serverConfig, "Bad Request");
 			
-			client->getSendBuffer() = response;
+			client->getSendBuffer() = response.serialize();
 			recvBuf.clear();
 			
 			_poller.modify(clientFd, POLLOUT);

@@ -78,11 +78,6 @@ private:
      * @return ファイル名のリスト
      */
     static std::vector<std::string> listDirectory(const std::string& dirPath);
-    
-    /**
-     * エラーレスポンスを生成
-     */
-    static HttpResponse makeErrorResponse(int statusCode, const std::string& message);
 };
 
 #endif // STATIC_FILE_HANDLER_HPP
