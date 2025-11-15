@@ -30,7 +30,11 @@ SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/Poller.cpp \
 			  $(SRC_DIR)/ClientConnection.cpp \
 			  $(SRC_DIR)/HttpRequest.cpp \
-			  $(SRC_DIR)/HttpRequestParser.cpp
+			  $(SRC_DIR)/HttpRequestParser.cpp \
+			  $(SRC_DIR)/HttpResponse.cpp \
+			  $(SRC_DIR)/Router.cpp \
+			  $(SRC_DIR)/StaticFileHandler.cpp \
+			  $(SRC_DIR)/MimeType.cpp
 
 # オブジェクトファイル
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)

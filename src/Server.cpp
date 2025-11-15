@@ -11,6 +11,8 @@
 /* ************************************************************************** */
 
 #include "Server.hpp"
+#include "Router.hpp"
+#include "StaticFileHandler.hpp"
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
@@ -252,31 +254,37 @@ void Server::handleClientRead(int clientFd) {
 			std::cout << "   HTTP Version: " << req.httpVersion << std::endl;
 			std::cout << "   Host: " << req.host << std::endl;
 			
-			// ヘッダーを表示
-			std::cout << "   Headers:" << std::endl;
-			for (std::map<std::string, std::string>::const_iterator it = req.headers.begin();
-			     it != req.headers.end(); ++it) {
-				std::cout << "     " << it->first << ": " << it->second << std::endl;
+			// ルーティング: サーバーとロケーションを選択
+			const ServerConfig* serverConfig = Router::findServer(_config, req);
+			const LocationConfig* locationConfig = NULL;
+			
+			if (serverConfig) {
+				locationConfig = Router::findLocation(*serverConfig, req.path);
+				std::cout << "   Server: " << (serverConfig->serverName.empty() ? "(default)" : serverConfig->serverName) << std::endl;
+				std::cout << "   Location: " << (locationConfig ? locationConfig->path : "(none)") << std::endl;
 			}
 			
-			// ボディがあれば表示
-			if (!req.body.empty()) {
-				std::cout << "   Body size: " << req.body.size() << " bytes" << std::endl;
+			// レスポンス生成
+			HttpResponse response;
+			
+			if (!serverConfig) {
+				// サーバーが見つからない（通常は発生しない）
+				response.setStatusCode(500);
+				response.setBody("Internal Server Error");
+			} else if (req.method == "GET" || req.method == "HEAD") {
+				// 静的ファイルハンドラーで処理
+				response = StaticFileHandler::handleGet(req, *serverConfig, locationConfig);
+			} else {
+				// その他のメソッドは未実装
+				response.setStatusCode(501);
+				response.setBody("Not Implemented");
 			}
 			
-			// TODO: Step 6 - ルーティング＆レスポンス生成
-			// 今は簡単なレスポンスを返す
-			std::string body = "<html><body><h1>Request Parsed!</h1><p>Path: " + req.path + "</p></body></html>";
-			std::ostringstream oss;
-			oss << body.size();
+			// レスポンスをシリアライズして送信バッファに設定
+			client->getSendBuffer() = response.serialize();
 			
-			std::string response = "HTTP/1.1 200 OK\r\n"
-			                       "Content-Type: text/html\r\n"
-			                       "Content-Length: " + oss.str() + "\r\n"
-			                       "\r\n" +
-			                       body;
-			
-			client->getSendBuffer() = response;
+			std::cout << "   Response: " << response.getStatusCode() << " " 
+			          << response.getReasonPhrase() << std::endl;
 			
 			// 受信バッファをクリア
 			recvBuf.clear();
