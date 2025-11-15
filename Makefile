@@ -27,7 +27,10 @@ SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/ConfigParser.cpp \
 			  $(SRC_DIR)/Listener.cpp \
 			  $(SRC_DIR)/Server.cpp \
-			  $(SRC_DIR)/Poller.cpp
+			  $(SRC_DIR)/Poller.cpp \
+			  $(SRC_DIR)/ClientConnection.cpp \
+			  $(SRC_DIR)/HttpRequest.cpp \
+			  $(SRC_DIR)/HttpRequestParser.cpp
 
 # オブジェクトファイル
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)

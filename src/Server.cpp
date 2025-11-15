@@ -15,6 +15,11 @@
 #include <sstream>
 #include <cstdlib>
 #include <csignal>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <cerrno>
 
 // シグナルハンドリング用のグローバル変数
 static volatile sig_atomic_t g_running = 1;
@@ -137,33 +142,228 @@ void Server::eventLoop() {
 void Server::handlePollEvent(const struct pollfd& pfd) {
 	// listen fdかどうかをチェック
 	bool isListenFd = false;
-	Listener* listener = NULL;
 	
 	for (size_t i = 0; i < _listeners.size(); ++i) {
 		if (_listeners[i]->getFd() == pfd.fd) {
 			isListenFd = true;
-			listener = _listeners[i];
 			break;
 		}
 	}
 	
 	if (isListenFd && (pfd.revents & POLLIN)) {
-		// listen ソケットに POLLIN イベント
-		std::cout << "📥 POLLIN event on listen socket (fd: " << pfd.fd << ")" << std::endl;
-		std::cout << "   Ready to accept new connection on " 
-		          << listener->getHost() << ":" << listener->getPort() << std::endl;
-		
-		// TODO: Step 4 - accept() して ClientConnection を作成
-	} else if (pfd.revents & POLLERR) {
-		std::cerr << "⚠️  POLLERR on fd: " << pfd.fd << std::endl;
-	} else if (pfd.revents & POLLHUP) {
-		std::cerr << "⚠️  POLLHUP on fd: " << pfd.fd << std::endl;
-	} else if (pfd.revents & POLLNVAL) {
-		std::cerr << "⚠️  POLLNVAL on fd: " << pfd.fd << std::endl;
+		// listen ソケットに POLLIN イベント - 新しい接続を受け入れる
+		acceptNewClient(pfd.fd);
+	} else if (_clients.find(pfd.fd) != _clients.end()) {
+		// クライアントソケットのイベント
+		if (pfd.revents & POLLIN) {
+			handleClientRead(pfd.fd);
+		} else if (pfd.revents & POLLOUT) {
+			handleClientWrite(pfd.fd);
+		} else if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+			std::cerr << "⚠️  Error on client fd " << pfd.fd << std::endl;
+			closeClient(pfd.fd);
+		}
+	} else {
+		// その他のエラー
+		if (pfd.revents & POLLERR) {
+			std::cerr << "⚠️  POLLERR on fd: " << pfd.fd << std::endl;
+		} else if (pfd.revents & POLLHUP) {
+			std::cerr << "⚠️  POLLHUP on fd: " << pfd.fd << std::endl;
+		} else if (pfd.revents & POLLNVAL) {
+			std::cerr << "⚠️  POLLNVAL on fd: " << pfd.fd << std::endl;
+		}
 	}
 }
 
+void Server::acceptNewClient(int listenFd) {
+	// listenFdに対応するListenerを見つける
+	Listener* listener = NULL;
+	for (size_t i = 0; i < _listeners.size(); ++i) {
+		if (_listeners[i]->getFd() == listenFd) {
+			listener = _listeners[i];
+			break;
+		}
+	}
+	
+	if (!listener) {
+		std::cerr << "⚠️  Listener not found for fd: " << listenFd << std::endl;
+		return;
+	}
+	
+	// accept()で新しい接続を受け入れる
+	struct sockaddr_in clientAddr;
+	socklen_t clientAddrLen = sizeof(clientAddr);
+	int clientFd = accept(listenFd, (struct sockaddr*)&clientAddr, &clientAddrLen);
+	
+	if (clientFd < 0) {
+		std::cerr << "⚠️  accept() failed" << std::endl;
+		return;
+	}
+	
+	// クライアントソケットを非ブロッキングに設定
+	int flags = fcntl(clientFd, F_GETFL, 0);
+	if (flags == -1) {
+		std::cerr << "⚠️  fcntl(F_GETFL) failed" << std::endl;
+		close(clientFd);
+		return;
+	}
+	
+	if (fcntl(clientFd, F_SETFL, flags | O_NONBLOCK) == -1) {
+		std::cerr << "⚠️  fcntl(F_SETFL) failed" << std::endl;
+		close(clientFd);
+		return;
+	}
+	
+	// ClientConnectionを作成
+	ClientConnection* client = new ClientConnection(clientFd, listener->getServerConfig());
+	_clients[clientFd] = client;
+	
+	// Pollerに追加（POLLIN で読み取り待機）
+	_poller.add(clientFd, POLLIN);
+	
+	std::cout << "✅ New client connected (fd: " << clientFd << ") on " 
+	          << listener->getHost() << ":" << listener->getPort() << std::endl;
+	
+	(void)client; // 未使用警告の回避（将来的に使用する）
+}
+
+void Server::handleClientRead(int clientFd) {
+	ClientConnection* client = _clients[clientFd];
+	
+	ssize_t n = client->readFromSocket();
+	
+	if (n > 0) {
+		std::cout << "📖 Read " << n << " bytes from client (fd: " << clientFd << ")" << std::endl;
+		
+		// HTTPリクエストをパース
+		std::string& recvBuf = client->getRecvBuffer();
+		HttpRequestParser& parser = client->getParser();
+		
+		parser.parse(recvBuf.c_str(), recvBuf.size());
+		
+		if (parser.getState() == HttpRequestParser::PARSE_DONE) {
+			// パース完了
+			const HttpRequest& req = parser.getRequest();
+			
+			std::cout << "✅ HTTP Request parsed successfully:" << std::endl;
+			std::cout << "   Method: " << req.method << std::endl;
+			std::cout << "   Path: " << req.path << std::endl;
+			std::cout << "   Query: " << req.query << std::endl;
+			std::cout << "   HTTP Version: " << req.httpVersion << std::endl;
+			std::cout << "   Host: " << req.host << std::endl;
+			
+			// ヘッダーを表示
+			std::cout << "   Headers:" << std::endl;
+			for (std::map<std::string, std::string>::const_iterator it = req.headers.begin();
+			     it != req.headers.end(); ++it) {
+				std::cout << "     " << it->first << ": " << it->second << std::endl;
+			}
+			
+			// ボディがあれば表示
+			if (!req.body.empty()) {
+				std::cout << "   Body size: " << req.body.size() << " bytes" << std::endl;
+			}
+			
+			// TODO: Step 6 - ルーティング＆レスポンス生成
+			// 今は簡単なレスポンスを返す
+			std::string body = "<html><body><h1>Request Parsed!</h1><p>Path: " + req.path + "</p></body></html>";
+			std::ostringstream oss;
+			oss << body.size();
+			
+			std::string response = "HTTP/1.1 200 OK\r\n"
+			                       "Content-Type: text/html\r\n"
+			                       "Content-Length: " + oss.str() + "\r\n"
+			                       "\r\n" +
+			                       body;
+			
+			client->getSendBuffer() = response;
+			
+			// 受信バッファをクリア
+			recvBuf.clear();
+			
+			// 書き込み可能になるまで待機
+			_poller.modify(clientFd, POLLOUT);
+			client->setState(ClientConnection::WRITING);
+		} else if (parser.getState() == HttpRequestParser::PARSE_ERROR) {
+			// パースエラー
+			std::cerr << "❌ HTTP parse error: " << parser.getErrorMessage() << std::endl;
+			
+			// 400 Bad Request を返す
+			std::string response = "HTTP/1.1 400 Bad Request\r\n"
+			                       "Content-Type: text/plain\r\n"
+			                       "Content-Length: 11\r\n"
+			                       "\r\n"
+			                       "Bad Request";
+			
+			client->getSendBuffer() = response;
+			recvBuf.clear();
+			
+			_poller.modify(clientFd, POLLOUT);
+			client->setState(ClientConnection::WRITING);
+		} else {
+			// パース継続中 - 次のデータを待つ
+			std::cout << "   Waiting for more data (current state: " << parser.getState() << ")" << std::endl;
+		}
+	} else if (n == 0) {
+		// クライアントが接続を閉じた
+		std::cout << "🔌 Client disconnected (fd: " << clientFd << ")" << std::endl;
+		closeClient(clientFd);
+	} else {
+		// エラー（EAGAINやEWOULDBLOCKは正常）
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			std::cerr << "⚠️  Read error on client (fd: " << clientFd << ")" << std::endl;
+			closeClient(clientFd);
+		}
+	}
+}
+
+void Server::handleClientWrite(int clientFd) {
+	ClientConnection* client = _clients[clientFd];
+	
+	ssize_t n = client->writeToSocket();
+	
+	if (n > 0) {
+		std::cout << "📝 Wrote " << n << " bytes to client (fd: " << clientFd << ")" << std::endl;
+		
+		// 全部送信完了したか確認
+		if (client->getSendBuffer().empty()) {
+			std::cout << "✅ Response sent completely to client (fd: " << clientFd << ")" << std::endl;
+			
+			// TODO: keep-alive のチェック
+			// 今は接続を閉じる
+			closeClient(clientFd);
+		}
+	} else if (n < 0) {
+		// エラー（EAGAINやEWOULDBLOCKは正常）
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			std::cerr << "⚠️  Write error on client (fd: " << clientFd << ")" << std::endl;
+			closeClient(clientFd);
+		}
+	}
+}
+
+void Server::closeClient(int clientFd) {
+	std::map<int, ClientConnection*>::iterator it = _clients.find(clientFd);
+	if (it == _clients.end()) {
+		return;
+	}
+	
+	_poller.remove(clientFd);
+	delete it->second;
+	_clients.erase(it);
+	
+	std::cout << "❌ Client connection closed (fd: " << clientFd << ")" << std::endl;
+}
+
 void Server::cleanup() {
+	// すべてのクライアントを閉じる
+	for (std::map<int, ClientConnection*>::iterator it = _clients.begin();
+	     it != _clients.end(); ++it) {
+		delete it->second;
+	}
+	_clients.clear();
+	
+	// すべてのリスナーを閉じる
 	for (size_t i = 0; i < _listeners.size(); ++i) {
 		delete _listeners[i];
 	}
