@@ -24,7 +24,9 @@ OBJ_DIR		= obj
 # ソースファイル
 SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/Config.cpp \
-			  $(SRC_DIR)/ConfigParser.cpp
+			  $(SRC_DIR)/ConfigParser.cpp \
+			  $(SRC_DIR)/Listener.cpp \
+			  $(SRC_DIR)/Server.cpp
 
 # オブジェクトファイル
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
