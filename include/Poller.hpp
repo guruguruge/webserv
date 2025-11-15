@@ -1,7 +1,7 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   Server.hpp                                         :+:      :+:    :+:   */
+/*   Poller.hpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: webserv                                    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
@@ -10,32 +10,30 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef SERVER_HPP
-#define SERVER_HPP
+#ifndef POLLER_HPP
+#define POLLER_HPP
 
-#include "Config.hpp"
-#include "Listener.hpp"
-#include "Poller.hpp"
+#include <poll.h>
 #include <vector>
 #include <map>
 
-class Server {
+class Poller {
 public:
-	Server(const Config& config);
-	~Server();
+	Poller();
+	~Poller();
 
-	void run();
+	void add(int fd, short events);
+	void modify(int fd, short events);
+	void remove(int fd);
+
+	int wait(int timeoutMs);
+	const std::vector<struct pollfd>& getEvents() const;
 
 private:
-	void initListeners();
-	void eventLoop();
-	void handlePollEvent(const struct pollfd& pfd);
-	void cleanup();
+	std::vector<struct pollfd> _fds;
+	std::map<int, size_t> _fdToIndex; // fd -> _fds のインデックス
 
-	Config _config;
-	std::vector<Listener*> _listeners;
-	Poller _poller;
-	bool _running;
+	void rebuildIndexMap();
 };
 
 #endif
