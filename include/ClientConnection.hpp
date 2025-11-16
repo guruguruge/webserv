@@ -17,6 +17,7 @@
 #include "HttpRequestParser.hpp"
 #include <string>
 #include <ctime>
+#include <sys/types.h>
 
 class ClientConnection {
 public:
