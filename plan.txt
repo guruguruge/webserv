@@ -1,0 +1,815 @@
+フェーズ1：全体アーキテクチャ（大雑把な設計）
+1-1. プロセスモデル・イベント駆動モデル
+
+単一プロセス・単一スレッド
+
+fork() は CGI 実行時のみ 使用
+
+それ以外は全部 1 プロセス・1 スレッドのイベントループ
+
+I/O モデル
+
+ソケットは 非ブロッキング
+
+poll()（または select() / kqueue() / epoll() のどれか1つ）で
+
+すべての listen ソケット
+
+すべての クライアントソケット
+
+CGI パイプの読み取り/書き込み用 fd
+を一括監視
+
+ループ内で 1 回だけ poll() を呼び、その結果に応じて read/write する
+
+read()/recv()/write()/send() 後に errno を見て挙動を変えない
+
+1-2. 主なコンポーネント（ざっくり）
+
+データ構造系
+
+Config
+
+全体設定＋複数の ServerConfig を保持
+
+ServerConfig
+
+listen (IP:port)
+
+error_page 設定
+
+client_max_body_size
+
+複数の LocationConfig（location / route）
+
+LocationConfig
+
+path（例: /upload）
+
+許可 HTTP メソッド（GET/POST/DELETE）
+
+root / index / autoindex
+
+upload_path
+
+cgi_path / cgi_extension など
+
+ランタイム系
+
+Server
+
+設定を元に listen ソケットを作り、イベントループを回すクラス
+
+Listener
+
+1つの listen ソケット (fd, address, port) の管理
+
+Poller
+
+poll() などのラッパー。std::vector<pollfd> を持つ
+
+ClientConnection
+
+クライアントごとの状態
+
+fd / 受信バッファ / 送信バッファ / HTTP リクエスト / レスポンス / 状態 (READING / WRITING / CGI_WAIT / CLOSED…)
+
+HTTP系
+
+HttpRequest / HttpRequestParser
+
+リクエスト行・ヘッダ・ボディ・チャンクのパース
+
+HttpResponse
+
+ステータスライン・ヘッダ・ボディを持ち、serialize() で文字列化
+
+Router
+
+Host + URL path から ServerConfig / LocationConfig を決定
+
+StaticFileHandler
+
+GET / DELETE / autoindex / エラーページ
+
+UploadHandler
+
+POST のファイルアップロード（multipart/form-data or raw body）
+
+CgiHandler
+
+fork + execve で CGI 実行
+
+pipe 経由で CGI 入出力を socket と同様に poll で監視
+
+1-3. データフロー（ざっくり）
+
+main
+
+設定ファイルパスを受け取る
+
+ConfigParser で Config を構築
+
+Server を生成し run() を呼ぶ
+
+Server::run() 起動時
+
+各 ServerConfig ごとに Listener を生成
+
+各 listen fd を非ブロッキング・SO_REUSEADDR 設定
+
+Poller に全 listen fd を POLLIN で登録
+
+イベントループ
+
+poll() で待機
+
+イベントごとに:
+
+listen fd + POLLIN: accept() して ClientConnection 生成、POLLIN で Poller に追加
+
+client fd + POLLIN: read() してバッファに追加 → HttpRequestParser に食わせる
+
+リクエスト完了 → Router → Handler（静的ファイル/アップロード/CGI）→ HttpResponse 生成 → 送信バッファに積む → fd を POLLOUT に
+
+パースエラー → エラーレスポンス生成
+
+0 バイト → クライアント切断 → close
+
+client fd + POLLOUT: 送信バッファから write()
+
+全部送り終わったら
+
+Connection: close → close
+
+keep-alive → 状態を初期化して POLLIN に戻す
+
+CGI fd（stdout / stderr）: 読み取って CGI 出力をバッファへ → 完了したら HTTP レスポンス化
+
+終了処理
+
+すべての fd を close
+
+動いていた CGI プロセスを kill/waitpid
+
+フェーズ2：Copilot に渡す用「実装ステップ」
+
+以下は「Step 1 から順に実装して」と Copilot に投げることを想定した手順書です。
+説明は日本語ですが、見出しは英語にしています。
+
+Step 0: プロジェクト構成とビルドの準備
+
+Makefile を用意して以下を満たす
+
+ターゲット: $(NAME), all, clean, fclean, re
+
+コンパイラ: c++
+
+フラグ: -Wall -Wextra -Werror -std=c++98
+
+ディレクトリ構成案
+
+src/ … 実装
+
+include/ … ヘッダ
+
+config/ … サンプル設定ファイル
+
+www/ … 静的ファイル
+
+main.cpp で
+
+設定ファイルパスを受け取る
+
+まだ中身は TODO で良い
+
+Step 1: 設定ファイルパーサの実装
+
+シンプルな NGINX 風の構文を想定（server { ... } / location /path { ... }）
+
+型を定義
+
+struct LocationConfig
+
+struct ServerConfig
+
+struct Config
+
+ConfigParser クラスを作り、以下を実装
+
+設定ファイルを読み込み、トークン分割
+
+server ブロック / location ブロックをパース
+
+最低限サポートするディレクティブ
+
+listen
+
+server_name（あってもなくてもいい）
+
+error_page
+
+client_max_body_size
+
+root, index, autoindex
+
+allowed_methods
+
+upload_path
+
+cgi_extension, cgi_pass（例: .php と /usr/bin/php-cgi）
+
+main() で ConfigParser を呼び出し、Config が構築できることを確認
+
+Step 2: リスナーソケットの作成と非ブロッキング設定
+
+Listener クラスを作成
+
+メンバ: int fd, std::string host, int port, ServerConfig* serverConfig
+
+createSocket() で
+
+socket(), setsockopt(SO_REUSEADDR), bind(), listen() を行う
+
+fcntl() で O_NONBLOCK を設定（macOS は指定されたフラグのみ使用）
+
+Server クラスを作成
+
+コンストラクタで Config を受け取り、Listeners を作る
+
+ここではまだ poll は使わず、ソケットが正しく listen できることを確認
+
+Step 3: Poller（イベントループ）の骨組み
+
+Poller クラスを作成
+
+内部で std::vector<struct pollfd> を保持
+
+メソッド
+
+void add(int fd, short events);
+
+void modify(int fd, short events);
+
+void remove(int fd);
+
+int wait(int timeout_ms); （内部で poll() を呼ぶ）
+
+const std::vector<pollfd>& getEvents() const;
+
+Server::run() で
+
+すべての listen fd を POLLIN で Poller に登録
+
+while (true) で poller.wait() を呼ぶループを作る
+
+revents & POLLIN のときだけログを出す簡単な処理でテスト
+
+Step 4: ClientConnection 管理と accept()
+
+ClientConnection クラスを作成
+
+メンバ
+
+int fd
+
+std::string recvBuffer;
+
+std::string sendBuffer;
+
+HttpRequest currentRequest;
+
+HttpResponse currentResponse;
+
+enum State { READING, WRITING, CGI_WAIT, CLOSED } state;
+
+メソッド
+
+ssize_t readFromSocket();
+
+ssize_t writeToSocket();
+
+Server に以下を追加
+
+std::map<int, ClientConnection> clients;
+
+poll イベントで
+
+listen fd + POLLIN: accept() → 新しい fd を非ブロッキングに → clients[fd] 追加 → Poller に POLLIN
+
+まだ HTTP パースはせず、「受け取ったデータをそのまま送り返す」echo 的な実装で動作確認
+
+Step 5: HttpRequest / HttpRequestParser の実装
+
+HttpRequest 構造体
+
+std::string method;
+
+std::string uri;
+
+std::string httpVersion;
+
+std::map<std::string, std::string> headers;
+
+std::string body;
+
+bool chunked;
+
+size_t contentLength;
+
+HttpRequestParser クラス
+
+状態機械で実装
+
+enum ParseState { PARSE_REQUEST_LINE, PARSE_HEADERS, PARSE_BODY, PARSE_CHUNK_SIZE, PARSE_CHUNK_BODY, PARSE_DONE, PARSE_ERROR };
+
+メソッド
+
+ParseResult consume(const std::string& data);
+
+data を内部バッファに追記し、状態に応じてパースを進める
+
+ParseResult は {ONGOING, DONE, ERROR}
+
+ClientConnection::readFromSocket() の後
+
+recvBuffer を HttpRequestParser に渡し、parseResult == DONE になったら
+
+currentRequest が完成したとみなす
+
+次のステップ（ルーティング＆レスポンス生成）へ
+
+Step 6: Router と静的ファイル GET の実装
+
+Router クラス
+
+メソッド
+
+const ServerConfig& findServer(const Config&, const HttpRequest&);
+
+const LocationConfig* findLocation(const ServerConfig&, const std::string& path);
+
+StaticFileHandler クラス
+
+メソッド
+
+HttpResponse handleGet(const HttpRequest&, const ServerConfig&, const LocationConfig*);
+
+処理概要
+
+LocationConfig が見つかった場合は root + path を組み立てる
+
+パスがディレクトリ
+
+index があればそのファイル
+
+なければ autoindex のフラグを見てディレクトリリスト or 403/404
+
+ファイルを open(), read() で読み込んで HttpResponse.body に格納
+
+Content-Type は拡張子から簡易判定（text/html, text/plain, image/png, etc.）
+
+HttpResponse クラス
+
+メンバ: int statusCode; std::string reasonPhrase; std::map<std::string, std::string> headers; std::string body;
+
+std::string serialize() const; で
+
+ステータスライン
+
+ヘッダ
+
+空行
+
+body を連結した文字列を返す
+
+ClientConnection
+
+リクエスト完了時に Router → StaticFileHandler::handleGet() でレスポンスを作成
+
+sendBuffer に response.serialize() を積んで状態を WRITING にし、fd を POLLOUT に変更
+
+Step 7: エラーページとステータスコードの統一
+
+ErrorPageManager（または StaticFileHandler に統合）で
+
+Config / ServerConfig の error_page 指定を見て、該当ファイルを返す
+
+ない場合はデフォルトの簡易 HTML を返す
+
+共通のヘルパー
+
+HttpResponse makeErrorResponse(int statusCode, const ServerConfig&);
+
+400 / 403 / 404 / 413 / 500 / 501 / 502 / 504 あたりを最低限準備
+
+Step 8: POST（アップロード）と DELETE の実装
+POST
+
+UploadHandler クラス
+
+HttpResponse handlePost(const HttpRequest&, const ServerConfig&, const LocationConfig*);
+
+LocationConfig に upload_path が設定されている URL に対して:
+
+client_max_body_size をチェック
+
+Content-Type が multipart/form-data の場合:
+
+シンプルな MultipartParser を実装し、1 ファイルだけでもよいので取り出して保存
+
+それ以外の場合:
+
+body 全体を1つのファイルとして保存
+
+保存先ファイル名の決め方
+
+本当は Content-Disposition の filename を使うが、最初はランダムなファイル名でもよい
+
+DELETE
+
+StaticFileHandler::handleDelete を追加
+
+対象パスのファイルが存在すれば unlink() して 204 No Content / 200 OK
+
+ない場合は 404
+
+Step 9: CGI の実装（最小）
+
+CgiHandler クラス
+
+メソッド
+
+void startCgi(ClientConnection&, const HttpRequest&, const ServerConfig&, const LocationConfig&);
+
+bool onCgiStdoutReadable(ClientConnection&, int cgiStdoutFd);
+
+startCgi の処理
+
+pipe() を2本（stdin 用, stdout 用）
+
+fork()
+
+子プロセス
+
+dup2() で pipe を STDIN_FILENO / STDOUT_FILENO に接続
+
+CGI 用の envp を構築（REQUEST_METHOD, SCRIPT_FILENAME, QUERY_STRING, CONTENT_LENGTH, CONTENT_TYPE, SERVER_PROTOCOL, etc.）
+
+execve(cgiPath, argv, envp);
+
+親プロセス
+
+必要な fd を閉じる
+
+CGI stdout fd を Poller に POLLIN で登録
+
+ClientConnection の状態を CGI_WAIT に
+
+onCgiStdoutReadable
+
+CGI stdout から read して cgiOutputBuffer に追記
+
+EOF になったら
+
+CGI の出力を HTTP レスポンスに変換
+
+CGI 出力に Status: ヘッダがある場合それを優先
+
+他のヘッダと空行の後を body として HttpResponse にセット
+
+sendBuffer に入れて WRITING 状態に遷移
+
+ここでも、read/write 後に errno を参照しない
+
+Step 10: keep-alive とタイムアウト
+
+ClientConnection に
+
+bool keepAlive;
+
+time_t lastActivity;
+
+レスポンス作成時に
+
+Connection ヘッダを見て keep-alive / close を決定
+
+イベントループ内で一定時間ごとに
+
+lastActivity が一定以上古いクライアントを切断
+
+Step 11: ストレステスト用の簡易スクリプト & バグつぶし
+
+Python などで
+
+同時に大量の接続を投げるスクリプトを作る
+
+ブラウザ + curl + telnet + テスター（配布されたもの）で動作確認
+
+クラッシュしないことを最優先でテスト
+
+フェーズ3：クラス／関数レベルの設計（プロトタイプ一覧）
+
+ここからは「関数単位」の設計です。
+すべて書くと膨大になるので、「必須そうなもの」を中心に列挙します。
+
+3-1. 設定関連
+// include/Config.hpp
+struct LocationConfig {
+    std::string path;
+    std::vector<std::string> allowedMethods;
+    std::string root;
+    std::string index;
+    bool autoindex;
+    std::string uploadPath;
+    std::string cgiExtension;
+    std::string cgiPath;
+};
+
+struct ServerConfig {
+    std::vector<std::string> listen; // "host:port" or ":port"
+    std::string serverName;
+    std::map<int, std::string> errorPages; // status -> file path
+    size_t clientMaxBodySize;
+    std::vector<LocationConfig> locations;
+};
+
+struct Config {
+    std::vector<ServerConfig> servers;
+};
+
+// include/ConfigParser.hpp
+class ConfigParser {
+public:
+    ConfigParser(const std::string& path);
+    Config parse();
+
+private:
+    void tokenize();
+    void parseServerBlock();
+    void parseLocationBlock(ServerConfig& server);
+
+    // ヘルパー
+    std::string nextToken();
+    bool hasMoreTokens() const;
+};
+
+3-2. Server / Listener / Poller
+// include/Listener.hpp
+class Listener {
+public:
+    Listener(const std::string& host, int port, ServerConfig* config);
+    ~Listener();
+
+    void init(); // socket/bind/listen/non-block
+    int  getFd() const;
+    ServerConfig* getServerConfig() const;
+
+private:
+    int         _fd;
+    std::string _host;
+    int         _port;
+    ServerConfig* _config;
+};
+
+// include/Poller.hpp
+class Poller {
+public:
+    void add(int fd, short events);
+    void modify(int fd, short events);
+    void remove(int fd);
+
+    int wait(int timeoutMs);
+    const std::vector<struct pollfd>& getEvents() const;
+
+private:
+    std::vector<struct pollfd> _fds;
+};
+
+// include/Server.hpp
+class Server {
+public:
+    Server(const Config& config);
+    ~Server();
+
+    void run();
+
+private:
+    void initListeners();
+    void eventLoop();
+    void handlePollEvent(const struct pollfd& pfd);
+
+    void acceptNewClient(int listenFd);
+    void handleClientRead(int clientFd);
+    void handleClientWrite(int clientFd);
+
+    void closeClient(int clientFd);
+
+private:
+    Config _config;
+    std::vector<Listener> _listeners;
+    Poller _poller;
+    std::map<int, ClientConnection> _clients;
+};
+
+3-3. ClientConnection
+// include/ClientConnection.hpp
+class ClientConnection {
+public:
+    enum State {
+        READING,
+        WRITING,
+        CGI_WAIT,
+        CLOSED
+    };
+
+    ClientConnection();
+    ClientConnection(int fd, ServerConfig* serverConfig);
+    ~ClientConnection();
+
+    int  getFd() const;
+    State getState() const;
+    void setState(State s);
+
+    ServerConfig* getServerConfig() const;
+
+    ssize_t readFromSocket();
+    ssize_t writeToSocket();
+
+    std::string& getRecvBuffer();
+    std::string& getSendBuffer();
+
+    HttpRequest&  getRequest();
+    HttpResponse& getResponse();
+
+    // keep-alive 関連
+    void updateActivity();
+    time_t getLastActivity() const;
+    void setKeepAlive(bool keep);
+    bool isKeepAlive() const;
+
+    // CGI 関連
+    void setCgiStdoutFd(int fd);
+    int  getCgiStdoutFd() const;
+    void appendCgiOutput(const std::string& data);
+    std::string& getCgiOutputBuffer();
+
+private:
+    int           _fd;
+    State         _state;
+    ServerConfig* _serverConfig;
+
+    std::string   _recvBuffer;
+    std::string   _sendBuffer;
+
+    HttpRequest   _request;
+    HttpResponse  _response;
+
+    bool          _keepAlive;
+    time_t        _lastActivity;
+
+    int           _cgiStdoutFd;
+    std::string   _cgiOutputBuffer;
+};
+
+3-4. HttpRequest / HttpRequestParser / HttpResponse
+// include/HttpRequest.hpp
+struct HttpRequest {
+    std::string method;
+    std::string uri;
+    std::string httpVersion;
+    std::map<std::string, std::string> headers;
+    std::string body;
+    bool   chunked;
+    size_t contentLength;
+
+    HttpRequest();
+};
+
+// include/HttpRequestParser.hpp
+class HttpRequestParser {
+public:
+    enum ParseState {
+        PARSE_REQUEST_LINE,
+        PARSE_HEADERS,
+        PARSE_BODY,
+        PARSE_CHUNK_SIZE,
+        PARSE_CHUNK_BODY,
+        PARSE_DONE,
+        PARSE_ERROR
+    };
+
+    enum ParseResult {
+        RESULT_ONGOING,
+        RESULT_DONE,
+        RESULT_ERROR
+    };
+
+    HttpRequestParser();
+
+    ParseResult consume(HttpRequest& req, std::string& buffer);
+    ParseState getState() const;
+
+private:
+    ParseState _state;
+    size_t     _expectedBodySize;
+    size_t     _remainingChunkSize;
+
+    bool parseRequestLine(HttpRequest& req, std::string& buffer);
+    bool parseHeaders(HttpRequest& req, std::string& buffer);
+    bool parseBody(HttpRequest& req, std::string& buffer);
+    bool parseChunkSize(std::string& buffer);
+    bool parseChunkBody(HttpRequest& req, std::string& buffer);
+};
+
+// include/HttpResponse.hpp
+class HttpResponse {
+public:
+    HttpResponse();
+
+    void setStatus(int code, const std::string& reason);
+    void setHeader(const std::string& name, const std::string& value);
+    void setBody(const std::string& body);
+
+    int getStatusCode() const;
+
+    std::string serialize() const;
+
+private:
+    int _statusCode;
+    std::string _reasonPhrase;
+    std::map<std::string, std::string> _headers;
+    std::string _body;
+};
+
+3-5. Router / StaticFileHandler / ErrorPageManager
+// include/Router.hpp
+class Router {
+public:
+    static const ServerConfig& findServer(const Config& config,
+                                          const HttpRequest& req);
+    static const LocationConfig* findLocation(const ServerConfig& server,
+                                              const std::string& path);
+};
+
+// include/StaticFileHandler.hpp
+class StaticFileHandler {
+public:
+    static HttpResponse handleGet( const HttpRequest& req,
+                                   const ServerConfig& server,
+                                   const LocationConfig* location);
+
+    static HttpResponse handleDelete( const HttpRequest& req,
+                                      const ServerConfig& server,
+                                      const LocationConfig* location);
+
+private:
+    static std::string resolvePath(const ServerConfig& server,
+                                   const LocationConfig* location,
+                                   const std::string& uri);
+
+    static bool isDirectory(const std::string& path);
+    static HttpResponse buildAutoIndex(const std::string& path,
+                                       const std::string& uri);
+};
+
+// include/ErrorPageManager.hpp
+class ErrorPageManager {
+public:
+    static HttpResponse makeErrorResponse( int statusCode,
+                                           const ServerConfig& server);
+};
+
+3-6. UploadHandler
+// include/UploadHandler.hpp
+class UploadHandler {
+public:
+    static HttpResponse handlePost( const HttpRequest& req,
+                                    const ServerConfig& server,
+                                    const LocationConfig* location);
+
+private:
+    static HttpResponse handleMultipart(const HttpRequest& req,
+                                        const LocationConfig* location);
+    static HttpResponse handleRaw(const HttpRequest& req,
+                                  const LocationConfig* location);
+};
+
+3-7. CgiHandler
+// include/CgiHandler.hpp
+class CgiHandler {
+public:
+    static void startCgi( ClientConnection& client,
+                          const HttpRequest& req,
+                          const ServerConfig& server,
+                          const LocationConfig& location);
+
+    static bool onCgiStdoutReadable( ClientConnection& client );
+
+private:
+    static char** buildEnvp(const HttpRequest& req,
+                            const ServerConfig& server,
+                            const LocationConfig& location);
+    static char** buildArgv(const LocationConfig& location,
+                            const HttpRequest& req);
+};

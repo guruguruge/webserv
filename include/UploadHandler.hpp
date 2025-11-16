@@ -1,0 +1,27 @@
+#ifndef UPLOADHANDLER_HPP
+#define UPLOADHANDLER_HPP
+
+#include "HttpRequest.hpp"
+#include "HttpResponse.hpp"
+#include "Config.hpp"
+#include <string>
+
+class UploadHandler {
+public:
+    static HttpResponse handlePost(const HttpRequest& req,
+                                   const ServerConfig& server,
+                                   const LocationConfig* location);
+
+private:
+    static HttpResponse handleMultipart(const HttpRequest& req,
+                                       const LocationConfig* location);
+    static HttpResponse handleRaw(const HttpRequest& req,
+                                 const LocationConfig* location);
+    
+    static std::string extractBoundary(const std::string& contentType);
+    static std::string extractFilename(const std::string& contentDisposition);
+    static std::string generateUniqueFilename();
+    static bool saveFile(const std::string& path, const std::string& content);
+};
+
+#endif
