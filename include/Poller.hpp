@@ -16,6 +16,7 @@
 #include <poll.h>
 #include <vector>
 #include <map>
+#include <cstddef>
 
 class Poller {
 public:

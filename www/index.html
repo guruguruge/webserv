@@ -3,36 +3,256 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Webserv - Welcome</title>
+	<title>Webserv - HTTP Server in C++98</title>
 	<style>
-		body {
-			font-family: Arial, sans-serif;
-			max-width: 800px;
-			margin: 50px auto;
-			padding: 20px;
-			background-color: #f5f5f5;
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
 		}
-		h1 {
-			color: #333;
+		body {
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			min-height: 100vh;
+			padding: 20px;
+		}
+		.container {
+			max-width: 1000px;
+			margin: 0 auto;
+			background-color: white;
+			border-radius: 12px;
+			box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+			overflow: hidden;
+		}
+		header {
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			padding: 40px;
 			text-align: center;
 		}
-		p {
+		header h1 {
+			font-size: 2.5em;
+			margin-bottom: 10px;
+		}
+		header p {
+			font-size: 1.1em;
+			opacity: 0.9;
+		}
+		.content {
+			padding: 40px;
+		}
+		.section {
+			margin-bottom: 40px;
+		}
+		.section h2 {
+			color: #667eea;
+			margin-bottom: 20px;
+			padding-bottom: 10px;
+			border-bottom: 2px solid #667eea;
+		}
+		.features {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+			gap: 20px;
+			margin-top: 20px;
+		}
+		.feature-card {
+			background: #f8f9fa;
+			padding: 25px;
+			border-radius: 8px;
+			border-left: 4px solid #667eea;
+			transition: transform 0.3s, box-shadow 0.3s;
+		}
+		.feature-card:hover {
+			transform: translateY(-5px);
+			box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+		}
+		.feature-card h3 {
+			color: #333;
+			margin-bottom: 10px;
+		}
+		.feature-card p {
 			color: #666;
 			line-height: 1.6;
 		}
-		.container {
-			background-color: white;
+		.demo-links {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 15px;
+			margin-top: 20px;
+		}
+		.demo-link {
+			display: block;
+			padding: 15px 20px;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			text-decoration: none;
+			border-radius: 8px;
+			text-align: center;
+			font-weight: bold;
+			transition: transform 0.2s, box-shadow 0.2s;
+		}
+		.demo-link:hover {
+			transform: scale(1.05);
+			box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+		}
+		.upload-section {
+			background: #f8f9fa;
 			padding: 30px;
 			border-radius: 8px;
-			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			margin-top: 20px;
+		}
+		.upload-form {
+			display: flex;
+			flex-direction: column;
+			gap: 15px;
+		}
+		.upload-form input[type="file"] {
+			padding: 10px;
+			border: 2px dashed #667eea;
+			border-radius: 8px;
+			cursor: pointer;
+		}
+		.upload-form button {
+			padding: 15px 30px;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			border: none;
+			border-radius: 8px;
+			font-size: 1em;
+			font-weight: bold;
+			cursor: pointer;
+			transition: transform 0.2s;
+		}
+		.upload-form button:hover {
+			transform: scale(1.05);
+		}
+		.info-box {
+			background: #e3f2fd;
+			border-left: 4px solid #2196f3;
+			padding: 20px;
+			margin-top: 20px;
+			border-radius: 4px;
+		}
+		.info-box h4 {
+			color: #1976d2;
+			margin-bottom: 10px;
+		}
+		.info-box ul {
+			list-style-position: inside;
+			color: #555;
+			line-height: 1.8;
+		}
+		footer {
+			background: #333;
+			color: white;
+			text-align: center;
+			padding: 20px;
+			margin-top: 40px;
 		}
 	</style>
 </head>
 <body>
 	<div class="container">
-		<h1>Welcome to Webserv!</h1>
-		<p>This is a simple HTTP server written in C++98.</p>
-		<p>Server is running successfully.</p>
+		<header>
+			<h1>🚀 Webserv</h1>
+			<p>高性能HTTPサーバー - C++98で実装</p>
+		</header>
+
+		<div class="content">
+			<!-- 機能紹介セクション -->
+			<div class="section">
+				<h2>✨ 主な機能</h2>
+				<div class="features">
+					<div class="feature-card">
+						<h3>📄 静的ファイル配信</h3>
+						<p>HTML, CSS, JavaScript, 画像などの静的ファイルを高速配信</p>
+					</div>
+					<div class="feature-card">
+						<h3>📤 ファイルアップロード</h3>
+						<p>POSTメソッドでファイルをサーバーにアップロード</p>
+					</div>
+					<div class="feature-card">
+						<h3>🔧 CGI対応</h3>
+						<p>Python, PHPなどのCGIスクリプトを実行可能</p>
+					</div>
+					<div class="feature-card">
+						<h3>🗑️ DELETE対応</h3>
+						<p>DELETEメソッドでファイルを削除</p>
+					</div>
+					<div class="feature-card">
+						<h3>⚡ Keep-Alive</h3>
+						<p>HTTP/1.1 keep-alive接続で効率的な通信</p>
+					</div>
+					<div class="feature-card">
+						<h3>🎯 複数ポート対応</h3>
+						<p>設定ファイルで複数のポートをリッスン可能</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- デモリンク -->
+			<div class="section">
+				<h2>🎮 デモ・テスト</h2>
+				<div class="demo-links">
+					<a href="/" class="demo-link">🏠 ホーム</a>
+					<a href="/cgi-bin/test.py" class="demo-link">🐍 Python CGI</a>
+					<a href="/upload/" class="demo-link">📁 アップロードディレクトリ</a>
+				</div>
+			</div>
+
+			<!-- ファイルアップロード -->
+			<div class="section">
+				<h2>📤 ファイルアップロード</h2>
+				<div class="upload-section">
+					<form class="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+						<label for="fileUpload"><strong>アップロードするファイルを選択:</strong></label>
+						<input type="file" id="fileUpload" name="file" required>
+						<button type="submit">📤 アップロード</button>
+					</form>
+				</div>
+			</div>
+
+			<!-- サーバー情報 -->
+			<div class="section">
+				<h2>ℹ️ サーバー情報</h2>
+				<div class="info-box">
+					<h4>実装された機能:</h4>
+					<ul>
+						<li>✅ GET, POST, DELETE メソッド対応</li>
+						<li>✅ ノンブロッキングI/O (poll使用)</li>
+						<li>✅ CGI実行 (Python, PHP対応)</li>
+						<li>✅ Multipart/form-data アップロード</li>
+						<li>✅ HTTP/1.1 Keep-Alive接続</li>
+						<li>✅ カスタムエラーページ</li>
+						<li>✅ ディレクトリリスティング (autoindex)</li>
+						<li>✅ クライアントタイムアウト処理</li>
+						<li>✅ 設定ファイルによる柔軟な設定</li>
+					</ul>
+				</div>
+			</div>
+
+			<!-- 技術仕様 -->
+			<div class="section">
+				<h2>🛠️ 技術仕様</h2>
+				<div class="info-box">
+					<h4>プロジェクト詳細:</h4>
+					<ul>
+						<li><strong>言語:</strong> C++98</li>
+						<li><strong>コンパイラ:</strong> c++ -Wall -Wextra -Werror -std=c++98</li>
+						<li><strong>I/Oモデル:</strong> ノンブロッキング + poll()</li>
+						<li><strong>アーキテクチャ:</strong> シングルプロセス・イベント駆動</li>
+						<li><strong>CGI実行:</strong> fork() + execve()</li>
+						<li><strong>設定:</strong> NGINX風の設定ファイル</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+
+		<footer>
+			<p>&copy; 2025 Webserv Project - 42 School</p>
+			<p>Created with C++98 ❤️</p>
+		</footer>
 	</div>
 </body>
 </html>

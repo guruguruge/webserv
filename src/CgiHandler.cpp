@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <iostream>
+#include <cerrno>
 
 bool CgiHandler::startCgi(
     ClientConnection& client,
