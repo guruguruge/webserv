@@ -81,3 +81,15 @@ int main()
     test_SendingLoop();
     return 0;
 }
+
+// 2. test_HttpResponse.cpp 用 (送信・構築) ttana
+// A. 正常系: レスポンス構築
+//     test_Build_Simple200OK(): ステータス、ContentType、Bodyをセットして正しい文字列になるか。
+//     test_Build_Redirect302(): Location ヘッダーを含むリダイレクトレスポンスが作れるか。
+//     test_Build_404NotFound(): エラーページ用のHTMLをBodyにセットできるか。
+//     test_Build_BinaryBody(): 画像ファイルの中身（バイナリ）をセットしても壊れないか。
+//     test_Auto_ContentLength(): Bodyをセットしただけで、自動的に正しい Content-Length ヘッダーが付与されるか。
+// B. 正常系: 送信バッファ管理 (epoll対応)
+//     test_Advance_FullSend(): response.getData() の全サイズを一気に advance() した場合、isDone() が true になるか。
+//     test_Advance_StepByStep(): 100バイトのレスポンスを、1バイトずつ100回 advance() しても、ポインタと残りサイズ (getRemainingSize) が正しく推移するか。
+//     test_Advance_OverAdvance(): 万が一残りサイズより多く advance() された時の安全性（assertするか無視するか）。

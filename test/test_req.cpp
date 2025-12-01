@@ -3,7 +3,6 @@
 #include <iostream>
 #include <cassert>
 #include <cstring>
-
 // 色付き出力用
 #define GREEN "\033[32m"
 #define RED "\033[31m"
@@ -81,3 +80,31 @@ int main()
     std::cout << "All HttpRequest tests passed!" << std::endl;
     return 0;
 }
+
+// 1. test_HttpRequest.cpp 用 (受信・パース) sabe
+// A. 正常系: 基本メソッドと完全なリクエスト
+// まずは普通にデータが一度に来た場合です。
+//     test_Parse_SimpleGet(): 標準的なGETリクエストがパースできるか。
+//     test_Parse_PostWithContentLength(): Content-Length 指定のPOSTで、Bodyが正しく読み取れるか。
+//     test_Parse_Delete(): DELETEリクエストがパースできるか。
+//     test_Parse_Head(): HEADリクエスト（Bodyなし）が処理できるか。
+//     test_Header_CaseInsensitivity(): Content-Type と content-type を同一視できるか。
+//     test_Header_Whitespace(): Host: localhost のようにコロンの後にスペースがあってもパースできるか。
+// B. 正常系: 分割受信 (epoll/ノンブロッキング対応)
+// ここが最重要です。 feed() を細かく刻んで呼び出します。
+//     test_Partial_RequestLine(): GET /ind ... (遅延) ... ex.html HTTP/1.1 のようにリクエストラインが分割されても耐えられるか。
+//     test_Partial_Headers(): ヘッダーの途中でデータが途切れても、次が来たら再開できるか。
+//     test_Partial_Body_ContentLength(): 指定されたLength分のデータが、3回くらいに分かれて届いても結合できるか。
+//     test_Boundary_CrLf(): \r と \n の間でパケットが分割された場合（\r だけ届いて \n がまだの状態）にバグらないか。
+// C. 準正常系: 特殊なエンコーディング
+//     test_Parse_ChunkedBody_Simple(): Transfer-Encoding: chunked が正しくパースできるか。
+//     test_Parse_ChunkedBody_Split(): チャンクサイズの数字やデータ本体が分割受信されても平気か。
+//     test_Parse_ChunkedBody_ZeroChunk(): 最後の 0\r\n\r\n を検知して終了できるか。
+//     test_Body_BinaryData(): 画像データなど、途中に NULL文字 (\0) を含むBodyを std::string ではなく vector<char> として正しく保持できているか。
+// D. 異常系: エラーハンドリング (4xx系)
+//     test_Error_UriTooLong(): MAX_URI_LENGTH を超えるパスが来た時にエラー状態になるか。
+//     test_Error_HeaderTooLarge(): ヘッダーサイズが巨大すぎる場合に拒否できるか。
+//     test_Error_InvalidMethod(): HOGE / HTTP/1.1 のような不明なメソッドを弾けるか。
+//     test_Error_InvalidHttpVersion(): HTTP/1.0 や HTTP/3 が来た時の挙動（許容するか弾くか）。
+//     test_Error_MissingHostHeader(): HTTP/1.1 なのに Host ヘッダーがない場合にエラーにできるか。
+//     test_Error_ContentLength_Format(): Content-Length: abc や負の値などの不正フォーマット。

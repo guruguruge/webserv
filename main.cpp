@@ -37,7 +37,7 @@ void setNonBlocking(int fd)
 }
 
 // ---------------------------------------------------------
-// [Logic担当] リクエストを処理してレスポンスを作る関数 (スタブ)
+// [ttanaka担当] リクエストを処理してレスポンスを作る関数 (スタブ)
 // 実際にはここで method, path, location設定を見て分岐する
 // ---------------------------------------------------------
 void processRequest(Client *client, const MainConfig &mainConfig)
@@ -51,7 +51,7 @@ void processRequest(Client *client, const MainConfig &mainConfig)
     const ServerConfig *srvConf = mainConfig.getServer("localhost", 8080); // 仮
     req.setConfig(srvConf);
 
-    // 2. ロジック実行 (簡易的なEchoサーバーとして動作)
+    // 2. ロジック実行 GET / POST / DELETE
     if (req.getMethod() == GET)
     {
         // ルートディレクトリの解決などは LocationConfig を使う
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // 設定読み込み
+    // 設定読み込み パースしないといけない
     MainConfig config;
     if (!config.load(argv[1]))
     {
@@ -223,13 +223,13 @@ int main(int argc, char **argv)
                         continue;
                     }
 
-                    // パーサーへ投入
+                    // パーサーへ投入 sabe担当
                     if (client->req.feed(buf, n))
                     {
                         // パース完了 -> ステータス変更 -> ロジック処理
                         client->setState(PROCESSING);
 
-                        // ロジック呼び出し (ここでResponseが作られる)
+                        // ttanaka担当 (ここでResponseが作られる)
                         processRequest(client, config);
 
                         // 監視イベントを書き込み(EPOLLOUT)に変更
