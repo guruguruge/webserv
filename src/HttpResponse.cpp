@@ -4,7 +4,13 @@ HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _sentByte
 
 HttpResponse::~HttpResponse() {}
 
-HttpResponse::HttpResponse(const HttpResponse &other) { *this = other; }
+HttpResponse::HttpResponse(const HttpResponse &other)
+    : _statusCode(other._statusCode),
+      _statusMessage(other._statusMessage),
+      _headers(other._headers),
+      _body(other._body),
+      _responseBuffer(other._responseBuffer),
+      _sentBytes(other._sentBytes) {}
 
 HttpResponse &HttpResponse::operator=(const HttpResponse &other) {
     if (this != &other) {
