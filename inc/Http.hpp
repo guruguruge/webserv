@@ -74,7 +74,8 @@ private:
 public:
     HttpResponse();
     ~HttpResponse();
-
+    HttpResponse(const HttpResponse &other);
+    HttpResponse &operator=(const HttpResponse &other);
     void clear();
 
     // レスポンス構築用メソッド
