@@ -7,6 +7,18 @@
 #include <vector>
 #include <sstream>
 
+// --- Error Codes ---
+enum ErrorCode {
+    ERR_NONE,
+    ERR_INVALID_METHOD,
+    ERR_INVALID_VERSION,
+    ERR_URI_TOO_LONG,
+    ERR_HEADER_TOO_LARGE,
+    ERR_MISSING_HOST,
+    ERR_CONTENT_LENGTH_FORMAT
+    // 必要に応じて追加
+};
+
 // --- HTTP Request ---
 // 受信バッファを持ち、feed()で少しずつパースを進める
 class HttpRequest
@@ -15,6 +27,7 @@ private:
     // 生データ管理
     std::string _buffer;
     ParseState _parseState;
+    ErrorCode _error;
 
     // パース結果
     HttpMethod _method;
