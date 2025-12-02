@@ -1,8 +1,8 @@
 #include "Http.hpp"
 
-HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _sentBytes(0) {};
+HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _sentBytes(0) {}
 
-HttpResponse::~HttpResponse() {};
+HttpResponse::~HttpResponse() {}
 
 HttpResponse::HttpResponse(const HttpResponse &other) { *this = other; }
 
