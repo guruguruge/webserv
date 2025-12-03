@@ -177,6 +177,7 @@ bool HttpResponse::setBodyFile(const std::string& filepath) {
 void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
   // TODO: configに対応する
   (void)config;
+  this->clear();
   this->setStatusCode(code);
   const std::string html_body =
       buildErrorHtml(this->_statusCode, this->_statusMessage);
