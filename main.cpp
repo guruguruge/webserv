@@ -2,6 +2,7 @@
 #include "inc/Config.hpp"
 #include "inc/Defines.hpp"
 #include "inc/Http.hpp"
+#include "inc/RequestHandler.hpp"
 
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -146,6 +147,7 @@ int main(int argc, char** argv) {
 
   // イベントループ
   struct epoll_event events[MAX_EVENTS];
+  RequestHandler handler(config);
   while (true) {
     int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
     if (nfds < 0) {
@@ -212,7 +214,7 @@ int main(int argc, char** argv) {
             client->setState(PROCESSING);
 
             // ttanaka担当 (ここでResponseが作られる)
-            processRequest(client, config);
+            handler.handle(client);
 
             // 監視イベントを書き込み(EPOLLOUT)に変更
             struct epoll_event ev_mod;
