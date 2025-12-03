@@ -133,8 +133,16 @@ void HttpRequest::parseRequestLine() {
     _query = uri.substr(queryPos + 1);
   }
 
-  // TODO: 6. バージョンをチェック
-  // TODO: 成功したら _parseState = REQ_HEADERS
+  // 6. バージョンをチェック
+  if (versionStr != "HTTP/1.1" && versionStr != "HTTP/1.0") {
+    _error = ERR_INVALID_VERSION;
+    _parseState = REQ_ERROR;
+    return;
+  }
+  _version = versionStr;
+
+  // 成功 → ヘッダー解析へ
+  _parseState = REQ_HEADERS;
 }
 
 // =============================================================================
