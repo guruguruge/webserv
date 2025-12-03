@@ -89,6 +89,7 @@ void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
 // response body: body content
 void HttpResponse::build() {
   this->_responseBuffer.clear();
+  this->_sentBytes = 0;
 
   // if headers has no "Content-Length", calculates body size and '"Content-Length": <body size>' pair.
   if (!this->_headers.count("Content-Length")) {

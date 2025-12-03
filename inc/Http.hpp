@@ -109,8 +109,10 @@ class HttpResponse {
   void advance(size_t n);  // nバイト送信完了
   bool isDone() const;
 
-  //debug用
-  //   friend void inspectBuffer(const HttpResponse& res);
+  //debug用: テスト時のみ有効化
+#ifdef ENABLE_TEST_FRIENDS
+  friend void inspectBuffer(const HttpResponse& res);
+#endif
 };
 
 #endif
