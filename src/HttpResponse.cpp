@@ -128,11 +128,16 @@ const char* HttpResponse::getData() const {
 }
 
 size_t HttpResponse::getRemainingSize() const {
-  return (this->_responseBuffer.size() - this->_sentBytes);
+  if (this->_sentBytes >= this->_responseBuffer.size()) {
+    return (0);
+  } else {
+    return (this->_responseBuffer.size() - this->_sentBytes);
+  }
 }
 
 void HttpResponse::advance(size_t n) {
-  if (this->_responseBuffer.size() - this->_sentBytes < n) {
+  if (this->_sentBytes >= this->_responseBuffer.size() ||
+      this->_responseBuffer.size() - this->_sentBytes < n) {
     this->_sentBytes = this->_responseBuffer.size();
   } else {
     this->_sentBytes += n;
