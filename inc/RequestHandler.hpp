@@ -1,9 +1,9 @@
 #ifndef REQUESTHANDLER_HPP
 #define REQUESTHANDLER_HPP
 
-#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <string>
 #include "Client.hpp"
 #include "Config.hpp"
 
