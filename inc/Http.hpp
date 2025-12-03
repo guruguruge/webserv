@@ -108,6 +108,9 @@ class HttpResponse {
   size_t getRemainingSize() const;
   void advance(size_t n);  // nバイト送信完了
   bool isDone() const;
+
+  //debug用
+  //   friend void inspectBuffer(const HttpResponse& res);
 };
 
 #endif
