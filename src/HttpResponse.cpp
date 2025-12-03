@@ -54,8 +54,7 @@ std::string HttpResponse::getMimeType(const std::string& filepath) {
   return "application/octet-stream";
 }
 
-const std::string HttpResponse::buildErrorHtml(int code,
-                                               const std::string& message) {
+std::string HttpResponse::buildErrorHtml(int code, const std::string& message) {
   std::ostringstream ss;
   ss << "<html>\r\n";
   ss << "<head><title>" << code << " " << message << "</title></head>\r\n";
