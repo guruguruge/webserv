@@ -113,6 +113,7 @@ class HttpResponse {
 
   // ヘルパー関数
   static std::string getMimeType(const std::string& filepath);
+  static const std::string buildErrorHtml(int code, const std::string& message);
 
   //debug用: テスト時のみ有効化
 #ifdef ENABLE_TEST_FRIENDS
@@ -123,6 +124,11 @@ class HttpResponse {
   friend void inspectResponse(const HttpResponse& res,
                               const std::string& checkName, const char* expData,
                               size_t expSize, const std::string& expType);
+  friend void inspectBuffer(const HttpResponse& res);
+  friend void inspectErrorResponse(const HttpResponse& res, int expCode,
+                                   const std::string& expMsg);
+  friend void inspectClear(const HttpResponse& res);
+  friend void inspectReuse(const HttpResponse& res, int expCode);
 #endif
 };
 
