@@ -1,6 +1,8 @@
 #ifndef HTTP_HPP
 #define HTTP_HPP
 
+#include <fstream>
+#include <iostream>
 #include <map>
 #include <sstream>
 #include <vector>
@@ -94,7 +96,7 @@ class HttpResponse {
   void setHeader(const std::string& key, const std::string& value);
   void setBody(const std::string& body);
   void setBody(const std::vector<char>& body);
-  void setBodyFile(
+  bool setBodyFile(
       const std::string& filepath);  // ファイルを読み込んでBodyにする
 
   // ErrorPage生成用
@@ -108,6 +110,9 @@ class HttpResponse {
   size_t getRemainingSize() const;
   void advance(size_t n);  // nバイト送信完了
   bool isDone() const;
+
+  // ヘルパー関数
+  static std::string getMimeType(const std::string& filepath);
 
   //debug用: テスト時のみ有効化
 #ifdef ENABLE_TEST_FRIENDS
