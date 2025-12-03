@@ -126,7 +126,7 @@ void HttpResponse::setBody(const std::vector<char>& body) {
   _body = body;
 }
 
-// read file and fill _body. if there is no "Content-Type" in _headers, sets "Content-Type" based on extension.
+// Reads file and fill _body. if there is no "Content-Type" in _headers, sets "Content-Type" based on extension.
 // inputs:
 //   filepath: input file's filepath
 // returns:
