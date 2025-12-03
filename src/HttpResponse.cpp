@@ -54,6 +54,17 @@ std::string HttpResponse::getMimeType(const std::string& filepath) {
   return "application/octet-stream";
 }
 
+std::string HttpResponse::buildErrorHtml(int code, const std::string& message) {
+  std::ostringstream ss;
+  ss << "<html>\r\n";
+  ss << "<head><title>" << code << " " << message << "</title></head>\r\n";
+  ss << "<body><center><h1>" << code << " " << message << "</h1></center>\r\n";
+  ss << "<hr><center>Webserv/1.0</center>\r\n";
+  ss << "</body>\r\n";
+  ss << "</html>\r\n";
+  return ss.str();
+}
+
 HttpResponse::HttpResponse()
     : _statusCode(200), _statusMessage("OK"), _sentBytes(0) {}
 
@@ -164,9 +175,14 @@ bool HttpResponse::setBodyFile(const std::string& filepath) {
 }
 
 void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
-  (void)code;
+  // TODO: configに対応する
   (void)config;
-  // TODO: PR5で実装
+  this->clear();
+  this->setStatusCode(code);
+  const std::string html_body =
+      buildErrorHtml(this->_statusCode, this->_statusMessage);
+  this->setBody(html_body);
+  this->setHeader("Content-Type", "text/html");
 }
 
 // builds http response(status line, response header, response body) based on its attributes.

@@ -1,6 +1,12 @@
 {
+    "git.path": "/usr/bin/git",
     "files.associations": {
         "string": "cpp",
-        "atomic": "cpp"
+        "atomic": "cpp",
+        "iostream": "cpp",
+        "sstream": "cpp",
+        "vector": "cpp",
+        "map": "cpp",
+        "*.tcc": "cpp"
     }
 }
