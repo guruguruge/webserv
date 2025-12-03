@@ -13,31 +13,31 @@
 #ifndef LISTENER_HPP
 #define LISTENER_HPP
 
-#include "Config.hpp"
 #include <string>
+#include "Config.hpp"
 
 class Listener {
-public:
-	Listener(const std::string& host, int port, ServerConfig* config);
-	~Listener();
+ public:
+  Listener(const std::string& host, int port, ServerConfig* config);
+  ~Listener();
 
-	void init(); // socket/bind/listen/non-block
-	int  getFd() const;
-	ServerConfig* getServerConfig() const;
-	std::string getHost() const;
-	int getPort() const;
+  void init();  // socket/bind/listen/non-block
+  int getFd() const;
+  ServerConfig* getServerConfig() const;
+  std::string getHost() const;
+  int getPort() const;
 
-private:
-	int         _fd;
-	std::string _host;
-	int         _port;
-	ServerConfig* _config;
+ private:
+  int _fd;
+  std::string _host;
+  int _port;
+  ServerConfig* _config;
 
-	void createSocket();
-	void setNonBlocking();
-	void setReuseAddr();
-	void bindSocket();
-	void listenSocket();
+  void createSocket();
+  void setNonBlocking();
+  void setReuseAddr();
+  void bindSocket();
+  void listenSocket();
 };
 
 #endif

@@ -12,13 +12,10 @@
 
 #include "Config.hpp"
 
-LocationConfig::LocationConfig()
-	: path("/"), autoindex(false) {
-}
+LocationConfig::LocationConfig() : path("/"), autoindex(false) {}
 
 ServerConfig::ServerConfig()
-	: clientMaxBodySize(1024 * 1024) { // デフォルト1MB
+    : clientMaxBodySize(1024 * 1024) {  // デフォルト1MB
 }
 
-Config::Config() {
-}
+Config::Config() {}

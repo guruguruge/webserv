@@ -14,26 +14,26 @@
 #define POLLER_HPP
 
 #include <poll.h>
-#include <vector>
 #include <map>
+#include <vector>
 
 class Poller {
-public:
-	Poller();
-	~Poller();
+ public:
+  Poller();
+  ~Poller();
 
-	void add(int fd, short events);
-	void modify(int fd, short events);
-	void remove(int fd);
+  void add(int fd, short events);
+  void modify(int fd, short events);
+  void remove(int fd);
 
-	int wait(int timeoutMs);
-	const std::vector<struct pollfd>& getEvents() const;
+  int wait(int timeoutMs);
+  const std::vector<struct pollfd>& getEvents() const;
 
-private:
-	std::vector<struct pollfd> _fds;
-	std::map<int, size_t> _fdToIndex; // fd -> _fds のインデックス
+ private:
+  std::vector<struct pollfd> _fds;
+  std::map<int, size_t> _fdToIndex;  // fd -> _fds のインデックス
 
-	void rebuildIndexMap();
+  void rebuildIndexMap();
 };
 
 #endif
