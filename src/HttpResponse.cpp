@@ -140,15 +140,21 @@ bool HttpResponse::setBodyFile(const std::string& filepath) {
   }
 
   // adjust _body size to the file size
-  std::streamsize size;
-  size = ifs.tellg();
+  std::ifstream::pos_type endPos = ifs.tellg();
+  if (endPos == std::ifstream::pos_type(-1)){
+    return (false);
+  }
+  std::size_t size = static_cast<std::size_t>(endPos);
   ifs.seekg(0, std::ios::beg);
-  this->_body.resize(size);
+
+  std::vector<char> tmpBody;
+  tmpBody.resize(size);
   if (size) {
-    ifs.read(&_body[0], size);
+    ifs.read(&tmpBody[0], size);
     if (ifs.fail())
       return (false);
   }
+  this->_body.swap(tmpBody);
 
   // if there is no content-type in headers, sets extension automatically.
   if (!this->_headers.count("Content-Type"))
