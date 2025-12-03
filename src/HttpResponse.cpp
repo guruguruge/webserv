@@ -121,21 +121,29 @@ void HttpResponse::build() {
 }
 
 const char* HttpResponse::getData() const {
-  // TODO: PR3で実装
-  return NULL;
+  if (this->_responseBuffer.empty() ||
+      this->_sentBytes >= this->_responseBuffer.size())
+    return (NULL);
+  return (&this->_responseBuffer[this->_sentBytes]);
 }
 
 size_t HttpResponse::getRemainingSize() const {
-  // TODO: PR3で実装
-  return 0;
+  if (this->_sentBytes >= this->_responseBuffer.size()) {
+    return (0);
+  } else {
+    return (this->_responseBuffer.size() - this->_sentBytes);
+  }
 }
 
 void HttpResponse::advance(size_t n) {
-  (void)n;
-  // TODO: PR3で実装
+  if (this->_sentBytes >= this->_responseBuffer.size() ||
+      this->_responseBuffer.size() - this->_sentBytes < n) {
+    this->_sentBytes = this->_responseBuffer.size();
+  } else {
+    this->_sentBytes += n;
+  }
 }
 
 bool HttpResponse::isDone() const {
-  // TODO: PR3で実装
-  return true;
+  return (this->_sentBytes >= this->_responseBuffer.size());
 }
