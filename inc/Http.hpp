@@ -1,114 +1,113 @@
 #ifndef HTTP_HPP
 #define HTTP_HPP
 
-#include "Defines.hpp"
-#include "Config.hpp"
 #include <map>
-#include <vector>
 #include <sstream>
+#include <vector>
+#include "Config.hpp"
+#include "Defines.hpp"
 
 // --- Error Codes ---
 enum ErrorCode {
-    ERR_NONE,
-    ERR_INVALID_METHOD,
-    ERR_INVALID_VERSION,
-    ERR_URI_TOO_LONG,
-    ERR_HEADER_TOO_LARGE,
-    ERR_MISSING_HOST,
-    ERR_CONTENT_LENGTH_FORMAT
-    // 必要に応じて追加
+  ERR_NONE,
+  ERR_INVALID_METHOD,
+  ERR_INVALID_VERSION,
+  ERR_URI_TOO_LONG,
+  ERR_HEADER_TOO_LARGE,
+  ERR_MISSING_HOST,
+  ERR_CONTENT_LENGTH_FORMAT
+  // 必要に応じて追加
 };
 
 // --- HTTP Request ---
 // 受信バッファを持ち、feed()で少しずつパースを進める
-class HttpRequest
-{
-private:
-    // 生データ管理
-    std::string _buffer;
-    ParseState _parseState;
-    ErrorCode _error;
+class HttpRequest {
+ private:
+  // 生データ管理
+  std::string _buffer;
+  ParseState _parseState;
+  ErrorCode _error;
 
-    // パース結果
-    HttpMethod _method;
-    std::string _path;
-    std::string _query;
-    std::string _version; // HTTP/1.1
-    std::map<std::string, std::string> _headers;
-    std::vector<char> _body;
+  // パース結果
+  HttpMethod _method;
+  std::string _path;
+  std::string _query;
+  std::string _version;  // HTTP/1.1
+  std::map<std::string, std::string> _headers;
+  std::vector<char> _body;
 
-    // 紐付いた設定（パース完了後にセットされる）
-    const ServerConfig *_config;
-    const LocationConfig *_location;
+  // 紐付いた設定（パース完了後にセットされる）
+  const ServerConfig* _config;
+  const LocationConfig* _location;
 
-    // 内部ヘルパー
-    void parseRequestLine();
-    void parseHeaders();
-    void parseBody();
+  // 内部ヘルパー
+  void parseRequestLine();
+  void parseHeaders();
+  void parseBody();
 
-public:
-    HttpRequest();
-    ~HttpRequest();
+ public:
+  HttpRequest();
+  ~HttpRequest();
 
-    // データを追加しパースを実行。完了したら true を返す。
-    bool feed(const char *data, size_t size);
+  // データを追加しパースを実行。完了したら true を返す。
+  bool feed(const char* data, size_t size);
 
-    // 状態確認
-    bool isComplete() const;
-    bool hasError() const;
+  // 状態確認
+  bool isComplete() const;
+  bool hasError() const;
 
-    // Keep-Alive用にリセット
-    void clear();
+  // Keep-Alive用にリセット
+  void clear();
 
-    // Getter / Setter
-    HttpMethod getMethod() const;
-    std::string getPath() const;
-    std::string getHeader(const std::string &key) const;
-    const std::vector<char> &getBody() const;
+  // Getter / Setter
+  HttpMethod getMethod() const;
+  std::string getPath() const;
+  std::string getHeader(const std::string& key) const;
+  const std::vector<char>& getBody() const;
 
-    void setConfig(const ServerConfig *config);
-    const ServerConfig *getConfig() const;
+  void setConfig(const ServerConfig* config);
+  const ServerConfig* getConfig() const;
 };
 
 // --- HTTP Response ---
 // ステータスコード等からレスポンスを生データ列に変換する
-class HttpResponse
-{
-private:
-    int _statusCode;
-    std::string _statusMessage;
-    std::map<std::string, std::string> _headers;
-    std::vector<char> _body;
+class HttpResponse {
+ private:
+  int _statusCode;
+  std::string _statusMessage;
+  std::map<std::string, std::string> _headers;
+  std::vector<char> _body;
 
-    // 送信バッファ管理
-    std::vector<char> _responseBuffer; // ヘッダ+ボディの完成形
-    size_t _sentBytes;                 // 送信済みバイト数
+  // 送信バッファ管理
+  std::vector<char> _responseBuffer;  // ヘッダ+ボディの完成形
+  size_t _sentBytes;                  // 送信済みバイト数
 
-public:
-    HttpResponse();
-    ~HttpResponse();
-    HttpResponse(const HttpResponse &other);
-    HttpResponse &operator=(const HttpResponse &other);
-    void clear();
+ public:
+  HttpResponse();
+  ~HttpResponse();
+  HttpResponse(const HttpResponse& other);
+  HttpResponse& operator=(const HttpResponse& other);
+  void clear();
 
-    // レスポンス構築用メソッド
-    void setStatusCode(int code);
-    void setHeader(const std::string &key, const std::string &value);
-    void setBody(const std::string &body);
-    void setBody(const std::vector<char> &body);
-    void setBodyFile(const std::string &filepath); // ファイルを読み込んでBodyにする
+  // レスポンス構築用メソッド
+  void setStatusCode(int code);
+  void setHeader(const std::string& key, const std::string& value);
+  void setBody(const std::string& body);
+  void setBody(const std::vector<char>& body);
+  void setBodyFile(
+      const std::string& filepath);  // ファイルを読み込んでBodyにする
 
-    // ErrorPage生成用
-    void makeErrorResponse(int code, const ServerConfig *config = NULL);
+  // ErrorPage生成用
+  void makeErrorResponse(int code, const ServerConfig* config = NULL);
 
-    // 送信準備: ヘッダとボディを結合して _responseBuffer を作る
-    void build();
+  // 送信準備: ヘッダとボディを結合して _responseBuffer を作る
+  void build();
 
-    // epollループで使う送信メソッド
-    const char *getData() const;
-    size_t getRemainingSize() const;
-    void advance(size_t n); // nバイト送信完了
-    bool isDone() const;
+  // epollループで使う送信メソッド
+  const char* getData() const;
+  size_t getRemainingSize() const;
+  void advance(size_t n);  // nバイト送信完了
+  bool isDone() const;
 };
 
 #endif
