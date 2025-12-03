@@ -13,38 +13,38 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
+#include <map>
+#include <vector>
+#include "ClientConnection.hpp"
 #include "Config.hpp"
 #include "Listener.hpp"
 #include "Poller.hpp"
-#include "ClientConnection.hpp"
-#include <vector>
-#include <map>
 
 class Server {
-public:
-	Server(const Config& config);
-	~Server();
+ public:
+  Server(const Config& config);
+  ~Server();
 
-	void run();
+  void run();
 
-private:
-	void initListeners();
-	void eventLoop();
-	void handlePollEvent(const struct pollfd& pfd);
-	
-	void acceptNewClient(int listenFd);
-	void handleClientRead(int clientFd);
-	void handleClientWrite(int clientFd);
-	void closeClient(int clientFd);
-	void checkClientTimeouts(int timeoutSeconds);
-	
-	void cleanup();
+ private:
+  void initListeners();
+  void eventLoop();
+  void handlePollEvent(const struct pollfd& pfd);
 
-	Config _config;
-	std::vector<Listener*> _listeners;
-	Poller _poller;
-	std::map<int, ClientConnection*> _clients;
-	bool _running;
+  void acceptNewClient(int listenFd);
+  void handleClientRead(int clientFd);
+  void handleClientWrite(int clientFd);
+  void closeClient(int clientFd);
+  void checkClientTimeouts(int timeoutSeconds);
+
+  void cleanup();
+
+  Config _config;
+  std::vector<Listener*> _listeners;
+  Poller _poller;
+  std::map<int, ClientConnection*> _clients;
+  bool _running;
 };
 
 #endif

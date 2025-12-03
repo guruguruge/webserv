@@ -13,67 +13,62 @@
 #ifndef CLIENT_CONNECTION_HPP
 #define CLIENT_CONNECTION_HPP
 
+#include <ctime>
+#include <string>
 #include "Config.hpp"
 #include "HttpRequestParser.hpp"
-#include <string>
-#include <ctime>
 
 class ClientConnection {
-public:
-	enum State {
-		READING,
-		WRITING,
-		CGI_WAIT,
-		CLOSED
-	};
+ public:
+  enum State { READING, WRITING, CGI_WAIT, CLOSED };
 
-	ClientConnection();
-	ClientConnection(int fd, ServerConfig* serverConfig);
-	~ClientConnection();
+  ClientConnection();
+  ClientConnection(int fd, ServerConfig* serverConfig);
+  ~ClientConnection();
 
-	int  getFd() const;
-	State getState() const;
-	void setState(State s);
+  int getFd() const;
+  State getState() const;
+  void setState(State s);
 
-	ServerConfig* getServerConfig() const;
+  ServerConfig* getServerConfig() const;
 
-	ssize_t readFromSocket();
-	ssize_t writeToSocket();
+  ssize_t readFromSocket();
+  ssize_t writeToSocket();
 
-	std::string& getRecvBuffer();
-	std::string& getSendBuffer();
+  std::string& getRecvBuffer();
+  std::string& getSendBuffer();
 
-	// HTTPリクエストパーサー
-	HttpRequestParser& getParser();
-	bool isRequestComplete() const;
+  // HTTPリクエストパーサー
+  HttpRequestParser& getParser();
+  bool isRequestComplete() const;
 
-	// keep-alive 関連
-	void updateActivity();
-	time_t getLastActivity() const;
-	void setKeepAlive(bool keep);
-	bool isKeepAlive() const;
+  // keep-alive 関連
+  void updateActivity();
+  time_t getLastActivity() const;
+  void setKeepAlive(bool keep);
+  bool isKeepAlive() const;
 
-	// CGI 関連
-	void setCgiStdoutFd(int fd);
-	int  getCgiStdoutFd() const;
-	void appendCgiOutput(const std::string& data);
-	std::string& getCgiOutputBuffer();
+  // CGI 関連
+  void setCgiStdoutFd(int fd);
+  int getCgiStdoutFd() const;
+  void appendCgiOutput(const std::string& data);
+  std::string& getCgiOutputBuffer();
 
-private:
-	int           _fd;
-	State         _state;
-	ServerConfig* _serverConfig;
+ private:
+  int _fd;
+  State _state;
+  ServerConfig* _serverConfig;
 
-	std::string   _recvBuffer;
-	std::string   _sendBuffer;
+  std::string _recvBuffer;
+  std::string _sendBuffer;
 
-	HttpRequestParser _parser;
+  HttpRequestParser _parser;
 
-	bool          _keepAlive;
-	time_t        _lastActivity;
+  bool _keepAlive;
+  time_t _lastActivity;
 
-	int           _cgiStdoutFd;
-	std::string   _cgiOutputBuffer;
+  int _cgiStdoutFd;
+  std::string _cgiOutputBuffer;
 };
 
 #endif

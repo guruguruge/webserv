@@ -1,9 +1,9 @@
 #ifndef ERROR_PAGE_MANAGER_HPP
 #define ERROR_PAGE_MANAGER_HPP
 
+#include <string>
 #include "Config.hpp"
 #include "HttpResponse.hpp"
-#include <string>
 
 /**
  * ErrorPageManager クラス
@@ -13,8 +13,8 @@
  * - デフォルトエラーページの生成
  */
 class ErrorPageManager {
-public:
-    /**
+ public:
+  /**
      * エラーレスポンスを生成
      * 
      * @param statusCode HTTPステータスコード
@@ -22,29 +22,25 @@ public:
      * @param message エラーメッセージ（省略可能）
      * @return HTTPレスポンス
      */
-    static HttpResponse makeErrorResponse(
-        int statusCode,
-        const ServerConfig* serverConfig = NULL,
-        const std::string& message = ""
-    );
+  static HttpResponse makeErrorResponse(int statusCode,
+                                        const ServerConfig* serverConfig = NULL,
+                                        const std::string& message = "");
 
-private:
-    /**
+ private:
+  /**
      * デフォルトエラーページのHTMLを生成
      */
-    static std::string generateDefaultErrorPage(
-        int statusCode,
-        const std::string& reasonPhrase,
-        const std::string& message
-    );
-    
-    /**
+  static std::string generateDefaultErrorPage(int statusCode,
+                                              const std::string& reasonPhrase,
+                                              const std::string& message);
+
+  /**
      * カスタムエラーページを読み込む
      * @param filePath エラーページのファイルパス
      * @param content 読み込んだ内容を格納する変数
      * @return 成功したらtrue
      */
-    static bool readErrorPage(const std::string& filePath, std::string& content);
+  static bool readErrorPage(const std::string& filePath, std::string& content);
 };
 
-#endif // ERROR_PAGE_MANAGER_HPP
+#endif  // ERROR_PAGE_MANAGER_HPP

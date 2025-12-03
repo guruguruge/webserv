@@ -13,37 +13,37 @@
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
 
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 struct LocationConfig {
-	std::string path;
-	std::vector<std::string> allowedMethods;
-	std::string root;
-	std::string index;
-	bool autoindex;
-	std::string uploadPath;
-	std::string cgiExtension;
-	std::string cgiPath;
+  std::string path;
+  std::vector<std::string> allowedMethods;
+  std::string root;
+  std::string index;
+  bool autoindex;
+  std::string uploadPath;
+  std::string cgiExtension;
+  std::string cgiPath;
 
-	LocationConfig();
+  LocationConfig();
 };
 
 struct ServerConfig {
-	std::vector<std::string> listen; // "host:port" or ":port"
-	std::string serverName;
-	std::map<int, std::string> errorPages; // status -> file path
-	size_t clientMaxBodySize;
-	std::vector<LocationConfig> locations;
+  std::vector<std::string> listen;  // "host:port" or ":port"
+  std::string serverName;
+  std::map<int, std::string> errorPages;  // status -> file path
+  size_t clientMaxBodySize;
+  std::vector<LocationConfig> locations;
 
-	ServerConfig();
+  ServerConfig();
 };
 
 struct Config {
-	std::vector<ServerConfig> servers;
+  std::vector<ServerConfig> servers;
 
-	Config();
+  Config();
 };
 
 #endif

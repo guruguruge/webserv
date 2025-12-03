@@ -7,5 +7,4 @@ HttpRequest::HttpRequest()
       host(""),
       port(""),
       path(""),
-      query("") {
-}
+      query("") {}
