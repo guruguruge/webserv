@@ -141,7 +141,7 @@ bool HttpResponse::setBodyFile(const std::string& filepath) {
 
   // adjust _body size to the file size
   std::ifstream::pos_type endPos = ifs.tellg();
-  if (endPos == std::ifstream::pos_type(-1)){
+  if (endPos == std::ifstream::pos_type(-1)) {
     return (false);
   }
   std::size_t size = static_cast<std::size_t>(endPos);
