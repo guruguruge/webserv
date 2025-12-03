@@ -1,4 +1,4 @@
-#include "Http.hpp"
+#include "../inc/Http.hpp"
 
 std::string HttpResponse::getMimeType(const std::string& filepath) {
   static std::map<std::string, std::string> mimeTypes;
