@@ -1,6 +1,20 @@
 #include "../inc/Http.hpp"
 
 // =============================================================================
+// ヘルパー関数: 文字列から HttpMethod への変換
+// =============================================================================
+static HttpMethod stringToMethod(const std::string& str) {
+  if (str == "GET") {
+    return GET;
+  } else if (str == "POST") {
+    return POST;
+  } else if (str == "DELETE") {
+    return DELETE;
+  }
+  return UNKNOWN_METHOD;
+}
+
+// =============================================================================
 // Default Constructor
 // =============================================================================
 HttpRequest::HttpRequest() : _config(NULL), _location(NULL) {
@@ -75,11 +89,60 @@ bool HttpRequest::hasError() const {
 }
 
 // =============================================================================
-// parseRequestLine - リクエストライン解析（TODO: 次ステップで実装）
+// parseRequestLine - リクエストライン解析
 // =============================================================================
 void HttpRequest::parseRequestLine() {
-  // TODO: "GET /path HTTP/1.1\r\n" を解析
-  // 完了したら _parseState = REQ_HEADERS に遷移
+  // 1. _buffer から \r\n を探す
+  std::string::size_type pos = _buffer.find("\r\n");
+  if (pos == std::string::npos) {
+    // 見つからなければ return（分割受信に備える）
+    return;
+  }
+
+  // 2. 1行取り出す → "GET /path?query HTTP/1.1"
+  std::string line = _buffer.substr(0, pos);
+  _buffer.erase(0, pos + 2);  // \r\n の2バイトも消す
+
+  // 3. スペース区切りで3つに分解
+  std::istringstream iss(line);
+  std::string methodStr, uri, versionStr;
+  iss >> methodStr >> uri >> versionStr;
+
+  // 3つ取れたか確認
+  if (methodStr.empty() || uri.empty() || versionStr.empty()) {
+    _error = ERR_INVALID_METHOD;
+    _parseState = REQ_ERROR;
+    return;
+  }
+
+  // 4. メソッドを HttpMethod に変換
+  _method = stringToMethod(methodStr);
+  if (_method == UNKNOWN_METHOD) {
+    _error = ERR_INVALID_METHOD;
+    _parseState = REQ_ERROR;
+    return;
+  }
+
+  // 5. パスとクエリを分割（?の位置で）
+  std::string::size_type queryPos = uri.find('?');
+  if (queryPos == std::string::npos) {
+    _path = uri;
+    _query.clear();
+  } else {
+    _path = uri.substr(0, queryPos);
+    _query = uri.substr(queryPos + 1);
+  }
+
+  // 6. バージョンをチェック
+  if (versionStr != "HTTP/1.1" && versionStr != "HTTP/1.0") {
+    _error = ERR_INVALID_VERSION;
+    _parseState = REQ_ERROR;
+    return;
+  }
+  _version = versionStr;
+
+  // 成功 → ヘッダー解析へ
+  _parseState = REQ_HEADERS;
 }
 
 // =============================================================================
