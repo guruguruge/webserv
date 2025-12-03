@@ -17,8 +17,8 @@ jobs:
 
     - name: Install clang-format
       run: |
-        sudo apt-get update
-        sudo apt-get install -y clang-format
+        # apt-getのバージョンは古いため、pip経由で新しいバージョンをインストール
+        python3 -m pip install clang-format
 
     - name: Check code formatting
       run: |
