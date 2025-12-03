@@ -1,3 +1,4 @@
+#include <cctype>
 #include "../inc/Http.hpp"
 
 // =============================================================================
@@ -12,6 +13,18 @@ static HttpMethod stringToMethod(const std::string& str) {
     return DELETE;
   }
   return UNKNOWN_METHOD;
+}
+
+// =============================================================================
+// ヘルパー関数: 文字列を小文字に変換
+// =============================================================================
+static std::string toLower(const std::string& str) {
+  std::string result = str;
+  for (std::string::size_type i = 0; i < result.size(); ++i) {
+    result[i] =
+        static_cast<char>(std::tolower(static_cast<unsigned char>(result[i])));
+  }
+  return result;
 }
 
 // =============================================================================
@@ -199,7 +212,7 @@ void HttpRequest::parseHeaders() {
       _buffer.erase(0, 2);  // 空行 "\r\n" を消す
 
       // HTTP/1.1 では Host ヘッダー必須
-      if (_version == "HTTP/1.1" && getHeader("Host").empty()) {
+      if (_version == "HTTP/1.1" && getHeader("host").empty()) {
         setError(ERR_MISSING_HOST);
         return;
       }
@@ -237,7 +250,7 @@ void HttpRequest::parseHeaders() {
       continue;
     }
 
-    std::string key = line.substr(0, colonPos);
+    std::string key = toLower(line.substr(0, colonPos));
     std::string value = line.substr(colonPos + 1);
 
     // 5. value の先頭空白をトリム
@@ -273,7 +286,8 @@ std::string HttpRequest::getPath() const {
 }
 
 std::string HttpRequest::getHeader(const std::string& key) const {
-  std::map<std::string, std::string>::const_iterator it = _headers.find(key);
+  std::map<std::string, std::string>::const_iterator it =
+      _headers.find(toLower(key));
   if (it != _headers.end()) {
     return it->second;
   }
