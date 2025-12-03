@@ -1,5 +1,59 @@
 #include "Http.hpp"
 
+std::string HttpResponse::getMimeType(const std::string& filepath) {
+  static std::map<std::string, std::string> mimeTypes;
+  if (mimeTypes.empty()) {
+    // --- Text ---
+    mimeTypes[".html"] = "text/html";
+    mimeTypes[".htm"] = "text/html";
+    mimeTypes[".css"] = "text/css";
+    mimeTypes[".js"] = "text/javascript";
+    mimeTypes[".txt"] = "text/plain";
+    mimeTypes[".csv"] = "text/csv";
+
+    // --- Image ---
+    mimeTypes[".jpg"] = "image/jpeg";
+    mimeTypes[".jpeg"] = "image/jpeg";
+    mimeTypes[".png"] = "image/png";
+    mimeTypes[".gif"] = "image/gif";
+    mimeTypes[".bmp"] = "image/bmp";
+    mimeTypes[".svg"] = "image/svg+xml";
+    mimeTypes[".ico"] = "image/x-icon";
+
+    // --- Application ---
+    mimeTypes[".pdf"] = "application/pdf";
+    mimeTypes[".zip"] = "application/zip";
+    mimeTypes[".tar"] = "application/x-tar";
+    mimeTypes[".json"] = "application/json";
+
+    // --- Audio/Video ---
+    mimeTypes[".mp3"] = "audio/mpeg";
+    mimeTypes[".mp4"] = "video/mp4";
+
+    // --- Office (必要であれば) ---
+    mimeTypes[".xls"] = "application/vnd.ms-excel";
+    mimeTypes[".xlsx"] =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    mimeTypes[".doc"] = "application/msword";
+    mimeTypes[".docx"] =
+        "application/"
+        "vnd.openxmlformats-officedocument.wordprocessingml.document";
+    mimeTypes[".ppt"] = "application/vnd.ms-powerpoint";
+    mimeTypes[".pptx"] =
+        "application/"
+        "vnd.openxmlformats-officedocument.presentationml.presentation";
+  }
+
+  std::string::size_type n;
+  n = filepath.rfind(".");
+  if (n != std::string::npos) {
+    std::string ext = filepath.substr(n);
+    if (mimeTypes.count(ext))
+      return mimeTypes[ext];
+  }
+  return "application/octet-stream";
+}
+
 HttpResponse::HttpResponse()
     : _statusCode(200), _statusMessage("OK"), _sentBytes(0) {}
 
@@ -72,9 +126,41 @@ void HttpResponse::setBody(const std::vector<char>& body) {
   _body = body;
 }
 
-void HttpResponse::setBodyFile(const std::string& filepath) {
-  (void)filepath;  // 未使用変数の警告消し
-                   // TODO: PR4で実装
+// Reads file and fill _body. if there is no "Content-Type" in _headers, sets "Content-Type" based on extension.
+// inputs:
+//   filepath: input file's filepath
+// returns:
+//   bool: false when filepath is invalid or error occurs while reading, otherwise true
+bool HttpResponse::setBodyFile(const std::string& filepath) {
+  std::ifstream ifs(filepath.c_str(), std::ios_base::in |
+                                          std::ios_base::binary |
+                                          std::ios_base::ate);
+  if (!ifs.is_open()) {
+    return (false);
+  }
+
+  // adjust _body size to the file size
+  std::ifstream::pos_type endPos = ifs.tellg();
+  if (endPos == std::ifstream::pos_type(-1)) {
+    return (false);
+  }
+  std::size_t size = static_cast<std::size_t>(endPos);
+  ifs.seekg(0, std::ios::beg);
+
+  std::vector<char> tmpBody;
+  tmpBody.resize(size);
+  if (size) {
+    ifs.read(&tmpBody[0], size);
+    if (ifs.fail())
+      return (false);
+  }
+  this->_body.swap(tmpBody);
+
+  // if there is no content-type in headers, sets extension automatically.
+  if (!this->_headers.count("Content-Type"))
+    this->_headers["Content-Type"] = getMimeType(filepath);
+
+  return (true);
 }
 
 void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
