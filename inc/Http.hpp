@@ -28,6 +28,10 @@ class HttpRequest {
   ParseState _parseState;
   ErrorCode _error;
 
+  // ヘッダーパース用カウンタ（DoS対策）
+  size_t _headerCount;
+  size_t _totalHeaderSize;
+
   // パース結果
   HttpMethod _method;
   std::string _path;
@@ -44,6 +48,7 @@ class HttpRequest {
   void parseRequestLine();
   void parseHeaders();
   void parseBody();
+  void setError(ErrorCode err);  // エラー状態をセットしREQ_ERRORに遷移
 
  public:
   HttpRequest();

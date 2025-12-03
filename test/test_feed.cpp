@@ -111,17 +111,15 @@ void test_clear() {
 }
 
 // =============================================================================
-// parseRequestLine実装後に通るべきテスト（現状はスキップ）
+// parseRequestLine実装後に通るべきテスト
 // =============================================================================
 void test_complete_request_line() {
   HttpRequest req;
 
-  // 完全なリクエストライン + ヘッダー終端
-  const char* data = "GET /index.html HTTP/1.1\r\n\r\n";
+  // 完全なリクエストライン + Hostヘッダー + ヘッダー終端
+  const char* data = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n";
   bool result = req.feed(data, std::strlen(data));
 
-  // TODO: parseRequestLine実装後、これらが通るようになる
-  // 現状はパース関数が空なので isComplete() = false
   std::cout << "[INFO] complete_request_line: result=" << result
             << ", isComplete=" << req.isComplete()
             << " (expected after implementation)" << std::endl;
