@@ -117,6 +117,12 @@ class HttpResponse {
   //debug用: テスト時のみ有効化
 #ifdef ENABLE_TEST_FRIENDS
   friend void inspectBuffer(const HttpResponse& res);
+  friend void inspectResponse(const HttpResponse& res,
+                              const std::string& checkName, size_t expSize,
+                              const std::string& expType);
+  friend void inspectResponse(const HttpResponse& res,
+                              const std::string& checkName, const char* expData,
+                              size_t expSize, const std::string& expType);
 #endif
 };
 
