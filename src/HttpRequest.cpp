@@ -228,11 +228,16 @@ void HttpRequest::parseHeaders() {
       }
 
       // Content-Length の形式チェックとボディ状態の決定
-      if (!transferEncoding.empty() &&
-          transferEncoding.find("chunked") != std::string::npos) {
-        // Transfer-Encoding: chunked の場合
-        _isChunked = true;
-        _parseState = REQ_BODY;
+      if (!transferEncoding.empty()) {
+        // Transfer-Encoding が指定されている場合は "chunked" のみ許可
+        if (transferEncoding == "chunked") {
+          _isChunked = true;
+          _parseState = REQ_BODY;
+        } else {
+          // "chunked" 以外はエラー (gzip, deflate 等は未サポート)
+          setError(ERR_INVALID_TRANSFER_ENCODING);
+          return;
+        }
       } else if (contentLength.empty()) {
         // Content-Length なし → ボディなし
         _parseState = REQ_COMPLETE;
