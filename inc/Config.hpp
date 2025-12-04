@@ -10,12 +10,13 @@
 struct LocationConfig {
   std::string path;                       // ex: "/tmp"
   std::string root;                       // ex: "/var/www/html"
+  std::string alias;                      // ex: "/var/www/static" (パス置換)
   std::string index;                      // ex: "index.html"
   std::vector<HttpMethod> allow_methods;  // GET, POST...
   std::string cgi_extension;              // ex: ".php"
   std::string upload_path;                // ex: "/uploads"
   bool autoindex;
-  std::string redirect_url;  // 301用
+  std::pair<int, std::string> return_redirect;  // 301 / "http://..."
 };
 
 // Serverブロック (ポート、サーバー名ごとの設定)
@@ -39,7 +40,7 @@ class MainConfig {
   MainConfig();  // コンストラクタでConfigパーサーを呼ぶか、別途loadメソッドを作る
   ~MainConfig();
 
-  bool load(const std::string& file_path);
+  bool load(const std::string& file_path); // conffileをパース、順次エラーを返す
 
   // Hostヘッダとポート番号から最適なServerConfigを特定する
   const ServerConfig* getServer(const std::string& host, int port) const;
