@@ -1,4 +1,5 @@
 #include "../inc/Http.hpp"
+#include <algorithm>
 
 std::string HttpResponse::getMimeType(const std::string& filepath) {
   static std::map<std::string, std::string> mimeTypes;
@@ -213,7 +214,7 @@ void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
 }
 
 // builds http response(status line, response header, response body) based on its attributes.
-// status line: "HTTP/1.0 <status code> <status message>\r\n"
+// status line: "HTTP/1.1 <status code> <status message>\r\n"
 // response header: "key: value\r\n" iteration
 // response body: body content
 void HttpResponse::build() {
