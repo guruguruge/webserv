@@ -340,8 +340,10 @@ void HttpRequest::parseBodyContentLength() {
   }
 
   // ボディが完全に読み取れたかチェック
-  if (_body.size() >= _contentLength) {
+  if (_body.size() == _contentLength) {
     _parseState = REQ_COMPLETE;
+  } else if (_body.size() > _contentLength) {
+    setError(ERR_CONTENT_LENGTH_FORMAT);
   }
   // まだ足りない場合は REQ_BODY のまま、次の feed() を待つ
 }
