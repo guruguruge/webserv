@@ -458,10 +458,31 @@ bool HttpRequest::parseChunkSizeLine() {
 // 戻り値: true=進捗あり, false=データ不足で待機
 // =============================================================================
 bool HttpRequest::parseChunkData() {
-  // TODO: 実装
-  // 1. _currentChunkSize - _chunkBytesRead 分のデータを読み取り
-  // 2. 完了したら CHUNK_DATA_CRLF へ
-  return false;
+  // バッファが空なら待機
+  if (_buffer.empty()) {
+    return false;
+  }
+
+  // 残り読み取るべきバイト数
+  size_t remaining = _currentChunkSize - _chunkBytesRead;
+
+  // バッファから読み取れる分を計算
+  size_t toRead = _buffer.size();
+  if (toRead > remaining) {
+    toRead = remaining;
+  }
+
+  // バッファからボディへ転送
+  _body.insert(_body.end(), _buffer.begin(), _buffer.begin() + toRead);
+  _buffer.erase(0, toRead);
+  _chunkBytesRead += toRead;
+
+  // このチャンクを読み終えたら CHUNK_DATA_CRLF へ
+  if (_chunkBytesRead == _currentChunkSize) {
+    _chunkState = CHUNK_DATA_CRLF;
+  }
+
+  return true;
 }
 
 // =============================================================================
