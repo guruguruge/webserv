@@ -13,6 +13,9 @@ class Client {
   std::string _ip;
   int _listenPort;  // どのポートで受けたか（Config検索用）
 
+  int _cgi_pipe_fd;  // CGIからの出力を読むパイプ (初期値 -1)
+  pid_t _cgi_pid;    // CGIの子プロセスID (初期値 0)
+
   ConnState _state;
   time_t _lastActivity;  // タイムアウト判定用
 
