@@ -45,9 +45,16 @@ static bool isDigitsOnly(const std::string& str) {
 // =============================================================================
 // Default Constructor
 // =============================================================================
-HttpRequest::HttpRequest() : _config(NULL), _location(NULL) {
-  clear();
-}
+HttpRequest::HttpRequest()
+    : _config(NULL),
+      _location(NULL),
+      _parseState(REQ_REQUEST_LINE),
+      _error(ERR_NONE),
+      _headerCount(0),
+      _totalHeaderSize(0),
+      _method(UNKNOWN_METHOD),
+      _contentLength(0),
+      _isChunked(false) {}
 
 // =============================================================================
 // Destructor
@@ -76,8 +83,7 @@ void HttpRequest::clear() {
   _body.clear();
   _contentLength = 0;
   _isChunked = false;
-
-  // chunkedパース用状態リセット
+  _location = NULL;
   _chunkState = CHUNK_SIZE_LINE;
   _currentChunkSize = 0;
   _chunkBytesRead = 0;

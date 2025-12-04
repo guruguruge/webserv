@@ -14,6 +14,8 @@
  * 2. 設定(Config)に基づき、パスの解決や権限チェックを行う
  * 3. 処理結果を HttpResponse に書き込む
  * 4. CGIの実行やエラーハンドリングのトリガーを引く
+ * 「重要」
+ * 処理毎で妥当なConnStateをClientに書き込んでください
  */
 class RequestHandler {
  public:
