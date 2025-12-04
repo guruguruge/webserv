@@ -76,6 +76,11 @@ void HttpRequest::clear() {
   _body.clear();
   _contentLength = 0;
   _isChunked = false;
+
+  // chunkedパース用状態リセット
+  _chunkState = CHUNK_SIZE_LINE;
+  _currentChunkSize = 0;
+  _chunkBytesRead = 0;
 }
 
 // =============================================================================
@@ -353,20 +358,76 @@ void HttpRequest::parseBodyContentLength() {
 // parseBodyChunked - Transfer-Encoding: chunked のボディ解析
 // =============================================================================
 void HttpRequest::parseBodyChunked() {
-  // TODO: chunked encoding の実装
-  // 各チャンクは以下の形式:
-  //   <chunk-size in hex>\r\n
-  //   <chunk-data>\r\n
-  // 最後のチャンクは:
-  //   0\r\n
-  //   \r\n
-  //
-  // 実装時の考慮事項:
-  // 1. チャンクサイズの16進数パース
-  // 2. チャンクデータの読み取り
-  // 3. 終端チャンク (size=0) の検出
-  // 4. client_max_body_size のチェック (累積サイズ)
-  // 5. trailer headers のスキップ (必要なら)
+  bool progress = true;
+
+  while (progress && _parseState == REQ_BODY) {
+    progress = false;
+
+    switch (_chunkState) {
+      case CHUNK_SIZE_LINE:
+        if (parseChunkSizeLine())
+          progress = true;
+        break;
+      case CHUNK_DATA:
+        if (parseChunkData())
+          progress = true;
+        break;
+      case CHUNK_DATA_CRLF:
+        if (parseChunkDataCRLF())
+          progress = true;
+        break;
+      case CHUNK_FINAL_CRLF:
+        if (parseChunkFinalCRLF())
+          progress = true;
+        break;
+    }
+  }
+}
+
+// =============================================================================
+// parseChunkSizeLine - チャンクサイズ行 "<hex>\r\n" をパース
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkSizeLine() {
+  // TODO: 実装
+  // 1. \r\n を探す
+  // 2. 16進数文字列をパース
+  // 3. サイズ0なら CHUNK_FINAL_CRLF へ、それ以外は CHUNK_DATA へ
+  // 4. ボディサイズ制限チェック
+  return false;
+}
+
+// =============================================================================
+// parseChunkData - チャンクデータを読み取り
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkData() {
+  // TODO: 実装
+  // 1. _currentChunkSize - _chunkBytesRead 分のデータを読み取り
+  // 2. 完了したら CHUNK_DATA_CRLF へ
+  return false;
+}
+
+// =============================================================================
+// parseChunkDataCRLF - チャンクデータ後の \r\n を消費
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkDataCRLF() {
+  // TODO: 実装
+  // 1. \r\n を確認して消費
+  // 2. CHUNK_SIZE_LINE へ戻る
+  return false;
+}
+
+// =============================================================================
+// parseChunkFinalCRLF - 終端チャンク後の \r\n を消費 (trailer対応)
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkFinalCRLF() {
+  // TODO: 実装
+  // 1. \r\n なら完了 (REQ_COMPLETE)
+  // 2. それ以外はtrailer headerとしてスキップ
+  return false;
 }
 
 // =============================================================================

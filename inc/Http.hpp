@@ -47,6 +47,17 @@ class HttpRequest {
   size_t _contentLength;  // Content-Lengthヘッダーの値
   bool _isChunked;        // Transfer-Encoding: chunked かどうか
 
+  // chunkedパース用状態
+  enum ChunkState {
+    CHUNK_SIZE_LINE,  // チャンクサイズ行を読み取り中
+    CHUNK_DATA,       // チャンクデータを読み取り中
+    CHUNK_DATA_CRLF,  // データ後の \r\n を待機中
+    CHUNK_FINAL_CRLF  // 終端チャンク後の \r\n (またはtrailer)
+  };
+  ChunkState _chunkState;
+  size_t _currentChunkSize;  // 現在のチャンクサイズ
+  size_t _chunkBytesRead;    // 現在のチャンクで読み取ったバイト数
+
   // 紐付いた設定（パース完了後にセットされる）
   const ServerConfig* _config;
   const LocationConfig* _location;
@@ -57,6 +68,10 @@ class HttpRequest {
   void parseBody();               // ボディ解析のディスパッチャ
   void parseBodyContentLength();  // Content-Length ベースのボディ解析
   void parseBodyChunked();        // chunked ベースのボディ解析
+  bool parseChunkSizeLine();      // チャンクサイズ行をパース
+  bool parseChunkData();          // チャンクデータを読み取り
+  bool parseChunkDataCRLF();      // データ後の \r\n を消費
+  bool parseChunkFinalCRLF();     // 終端の \r\n を消費
   void setError(ErrorCode err);   // エラー状態をセットしREQ_ERRORに遷移
 
  public:
