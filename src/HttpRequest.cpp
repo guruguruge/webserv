@@ -238,6 +238,11 @@ void HttpRequest::parseHeaders() {
         // Content-Lengthの値をメンバ変数に代入
         std::istringstream iss(contentLength);
         iss >> _contentLength;
+        // client_max_body_size との比較
+        if (_config != NULL && _contentLength > _config->client_max_body_size) {
+          setError(ERR_BODY_TOO_LARGE);
+          return;
+        }
         _parseState = REQ_BODY;
       }
       return;
