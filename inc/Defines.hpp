@@ -7,6 +7,7 @@
 // サーバー全体の定数
 #define MAX_URI_LENGTH 8192
 #define MAX_HEADER_SIZE 16384
+#define DEFAULT_CLIENT_MAX_BODY_SIZE 1048576  // 1MB (1024 * 1024)
 
 // 多分これでいい
 enum HttpMethod { GET, POST, DELETE, UNKNOWN_METHOD };
