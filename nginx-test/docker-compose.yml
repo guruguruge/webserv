@@ -1,0 +1,12 @@
+version: '3'
+services:
+  nginx-ref:
+    image: nginx:alpine
+    container_name: nginx-reference
+    ports:
+      - "8080:8080"  # Webservに合わせて8080にする
+    volumes:
+      # 手元の設定ファイルをコンテナにマウント（反映）させる
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # 手元のhtmlフォルダをドキュメントルートにする
+      - ./html:/var/www/html:ro
