@@ -40,7 +40,8 @@ class MainConfig {
   MainConfig();  // コンストラクタでConfigパーサーを呼ぶか、別途loadメソッドを作る
   ~MainConfig();
 
-  bool load(const std::string& file_path); // conffileをパース、順次エラーを返す
+  bool load(
+      const std::string& file_path);  // conffileをパース、順次エラーを返す
 
   // Hostヘッダとポート番号から最適なServerConfigを特定する
   const ServerConfig* getServer(const std::string& host, int port) const;
