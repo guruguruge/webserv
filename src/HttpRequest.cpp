@@ -21,12 +21,7 @@ static bool isDigitsOnly(const std::string& str) {
   if (str.empty()) {
     return false;
   }
-  for (std::string::size_type i = 0; i < str.size(); ++i) {
-    if (str[i] < '0' || str[i] > '9') {
-      return false;
-    }
-  }
-  return true;
+  return str.find_first_not_of("0123456789") == std::string::npos;
 }
 
 // =============================================================================
