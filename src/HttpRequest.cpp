@@ -257,7 +257,9 @@ void HttpRequest::parseHeaders() {
           return;
         }
         // client_max_body_size との比較
-        if (_config != NULL && _contentLength > _config->client_max_body_size) {
+        size_t maxBodySize = (_config != NULL) ? _config->client_max_body_size
+                                               : DEFAULT_CLIENT_MAX_BODY_SIZE;
+        if (_contentLength > maxBodySize) {
           setError(ERR_BODY_TOO_LARGE);
           return;
         }

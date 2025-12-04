@@ -299,6 +299,129 @@ void test_Clear_And_Reuse() {
 }
 
 // =============================================================================
+// テスト11: Content-Length が client_max_body_size を超過した場合
+// =============================================================================
+void test_BodyTooLarge() {
+  printSection("Body Too Large Test");
+
+  // ServerConfigを設定（client_max_body_size = 100）
+  ServerConfig config;
+  config.listen_port = 8080;
+  config.host = "127.0.0.1";
+  config.client_max_body_size = 100;
+
+  HttpRequest req;
+  req.setConfig(&config);
+
+  // Content-Length: 200 (制限の100を超過)
+  const char* raw =
+      "POST /upload HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Content-Length: 200\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("BodyTooLarge: Not Complete", completed == false);
+  printResult("BodyTooLarge: Has Error", req.hasError() == true);
+}
+
+// =============================================================================
+// テスト12: Content-Length がちょうど client_max_body_size と同じ場合 (OK)
+// =============================================================================
+void test_BodyExactLimit() {
+  printSection("Body Exact Limit Test");
+
+  ServerConfig config;
+  config.listen_port = 8080;
+  config.host = "127.0.0.1";
+  config.client_max_body_size = 10;
+
+  HttpRequest req;
+  req.setConfig(&config);
+
+  // Content-Length: 10 (制限と同じ → OK)
+  const char* raw =
+      "POST /upload HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Content-Length: 10\r\n"
+      "\r\n"
+      "1234567890";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("BodyExactLimit: Parse Complete", completed == true);
+  printResult("BodyExactLimit: No Error", req.hasError() == false);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("BodyExactLimit: Body Content", bodyStr == "1234567890");
+}
+
+// =============================================================================
+// テスト13: Content-Length が client_max_body_size を1バイト超過
+// =============================================================================
+void test_BodyOneByteOver() {
+  printSection("Body One Byte Over Test");
+
+  ServerConfig config;
+  config.listen_port = 8080;
+  config.host = "127.0.0.1";
+  config.client_max_body_size = 10;
+
+  HttpRequest req;
+  req.setConfig(&config);
+
+  // Content-Length: 11 (制限の10を1バイト超過)
+  const char* raw =
+      "POST /upload HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Content-Length: 11\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("BodyOneByteOver: Not Complete", completed == false);
+  printResult("BodyOneByteOver: Has Error", req.hasError() == true);
+}
+
+// =============================================================================
+// テスト14: Configが設定されていない場合はデフォルト制限 (1MB) を使用
+// =============================================================================
+void test_NoConfigDefaultLimit() {
+  printSection("No Config Default Limit Test");
+
+  HttpRequest req;
+  // setConfig() を呼ばない → デフォルト制限 (1MB = 1048576) が適用される
+
+  // デフォルト制限内のContent-Length → OK
+  const char* raw1 =
+      "POST /upload HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Content-Length: 1000\r\n"
+      "\r\n";
+
+  bool completed1 = req.feed(raw1, std::strlen(raw1));
+  printResult("NoConfigDefaultLimit: Small body OK (waiting for body)",
+              completed1 == false);
+  printResult("NoConfigDefaultLimit: No Error", req.hasError() == false);
+
+  // リセットして再テスト
+  req.clear();
+
+  // デフォルト制限を超えるContent-Length → エラー
+  const char* raw2 =
+      "POST /upload HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Content-Length: 2000000\r\n"  // 2MB > 1MB
+      "\r\n";
+
+  bool completed2 = req.feed(raw2, std::strlen(raw2));
+  printResult("NoConfigDefaultLimit: Large body rejected", completed2 == false);
+  printResult("NoConfigDefaultLimit: Has Error", req.hasError() == true);
+}
+
+// =============================================================================
 // main
 // =============================================================================
 int main() {
@@ -314,6 +437,10 @@ int main() {
   test_Body_BinaryData();
   test_Body_LargeFragmented();
   test_Clear_And_Reuse();
+  test_BodyTooLarge();
+  test_BodyExactLimit();
+  test_BodyOneByteOver();
+  test_NoConfigDefaultLimit();
 
   std::cout << GREEN << "\n=== All Body Parse Tests Passed! ===" << RESET
             << std::endl;
