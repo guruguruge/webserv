@@ -109,6 +109,9 @@ class HttpResponse {
   // 送信準備: ヘッダとボディを結合して _responseBuffer を作る
   void build();
 
+  // Chunked Transfer Encoding関連
+  void setChunked(bool isChunked);
+
   // epollループで使う送信メソッド
   const char* getData() const;
   size_t getRemainingSize() const;

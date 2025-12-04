@@ -66,7 +66,11 @@ std::string HttpResponse::buildErrorHtml(int code, const std::string& message) {
 }
 
 HttpResponse::HttpResponse()
-    : _statusCode(200), _statusMessage("OK"), _isChunked(false), _chunkSize(1024), _sentBytes(0) {}
+    : _statusCode(200),
+      _statusMessage("OK"),
+      _isChunked(false),
+      _chunkSize(1024),
+      _sentBytes(0) {}
 
 HttpResponse::~HttpResponse() {}
 
@@ -226,6 +230,10 @@ void HttpResponse::build() {
   if (!this->_body.empty())
     this->_responseBuffer.insert(this->_responseBuffer.end(),
                                  this->_body.begin(), this->_body.end());
+}
+
+void HttpResponse::setChunked(bool isChunked) {
+  this->_isChunked = isChunked;
 }
 
 const char* HttpResponse::getData() const {
