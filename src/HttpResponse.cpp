@@ -65,6 +65,11 @@ std::string HttpResponse::buildErrorHtml(int code, const std::string& message) {
   return ss.str();
 }
 
+bool HttpResponse::isBodyForbidden(int code) {
+  // 1xx (Informational), 204 (No Content), 304 (Not Modified)
+  return (code >= 100 && code < 200) || code == 204 || code == 304;
+}
+
 HttpResponse::HttpResponse()
     : _statusCode(200),
       _statusMessage("OK"),
@@ -184,6 +189,14 @@ bool HttpResponse::setBodyFile(const std::string& filepath) {
   return (true);
 }
 
+void HttpResponse::setChunked(bool isChunked) {
+  this->_isChunked = isChunked;
+}
+
+void HttpResponse::setRequestMethod(HttpMethod method) {
+  this->_requestMethod = method;
+}
+
 void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
   // TODO: configに対応する
   (void)config;
@@ -230,10 +243,6 @@ void HttpResponse::build() {
   if (!this->_body.empty())
     this->_responseBuffer.insert(this->_responseBuffer.end(),
                                  this->_body.begin(), this->_body.end());
-}
-
-void HttpResponse::setChunked(bool isChunked) {
-  this->_isChunked = isChunked;
 }
 
 const char* HttpResponse::getData() const {

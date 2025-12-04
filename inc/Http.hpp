@@ -79,6 +79,7 @@ class HttpResponse {
   std::string _statusMessage;
   std::map<std::string, std::string> _headers;
   std::vector<char> _body;
+  HttpMethod _requestMethod;
 
   // Chunked Transfer Encoding関連
   bool _isChunked;
@@ -102,15 +103,14 @@ class HttpResponse {
   void setBody(const std::vector<char>& body);
   bool setBodyFile(
       const std::string& filepath);  // ファイルを読み込んでBodyにする
+  void setChunked(bool isChunked);
+  void setRequestMethod(HttpMethod method);
 
   // ErrorPage生成用
   void makeErrorResponse(int code, const ServerConfig* config = NULL);
 
   // 送信準備: ヘッダとボディを結合して _responseBuffer を作る
   void build();
-
-  // Chunked Transfer Encoding関連
-  void setChunked(bool isChunked);
 
   // epollループで使う送信メソッド
   const char* getData() const;
@@ -121,6 +121,7 @@ class HttpResponse {
   // ヘルパー関数
   static std::string getMimeType(const std::string& filepath);
   static std::string buildErrorHtml(int code, const std::string& message);
+  static bool isBodyForbidden(int code);
 
   //debug用: テスト時のみ有効化
 #ifdef ENABLE_TEST_FRIENDS
