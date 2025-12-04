@@ -220,16 +220,28 @@ void HttpResponse::build() {
   this->_responseBuffer.clear();
   this->_sentBytes = 0;
 
-  // if headers has no "Content-Length", calculates body size and '"Content-Length": <body size>' pair.
-  if (!this->_headers.count("Content-Length")) {
-    std::ostringstream len_ss;
-    len_ss << this->_body.size();
-    this->_headers["Content-Length"] = len_ss.str();
+  // complies to RFC
+  bool hasBody = true;
+  if (isBodyForbidden(this->_statusCode)) {
+    this->_headers.erase("Content-Length");
+    this->_headers.erase("Transfer-Encoding");
+    hasBody = false;
+  }
+
+  if (this->_isChunked) {
+    this->_headers.erase("Content-Length");
+    this->_headers["Transfer-Encoding"] = "chunked";
+  } else {
+    if (!this->_headers.count("Content-Length")) {
+      std::ostringstream len_ss;
+      len_ss << this->_body.size();
+      this->_headers["Content-Length"] = len_ss.str();
+    }
   }
 
   // creates status line and response header string
   std::ostringstream ss;
-  ss << "HTTP/1.0 " << this->_statusCode << " " << this->_statusMessage
+  ss << "HTTP/1.1 " << this->_statusCode << " " << this->_statusMessage
      << "\r\n";
   for (std::map<std::string, std::string>::iterator it = this->_headers.begin();
        it != this->_headers.end(); ++it) {
@@ -243,10 +255,38 @@ void HttpResponse::build() {
                                status_line_and_header.begin(),
                                status_line_and_header.end());
 
+  if (!hasBody || this->_body.empty())
+    return;
+
   // insert response body to buffer
-  if (!this->_body.empty())
+  if (this->_isChunked) {
+    size_t offset = 0;
+    while (offset < this->_body.size()) {
+      size_t currentSize = std::min(this->_chunkSize, _body.size() - offset);
+
+      std::ostringstream ss;
+      ss << std::hex << currentSize << "\r\n";
+      std::string sizeSection = ss.str();
+
+      this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                   sizeSection.begin(), sizeSection.end());
+      this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                   this->_body.begin() + offset,
+                                   this->_body.begin() + offset + currentSize);
+
+      const char* crlf = "\r\n";
+      this->_responseBuffer.insert(this->_responseBuffer.end(), crlf, crlf + 2);
+
+      offset += currentSize;
+    }
+
+    const char* endChunk = "0\r\n\r\n";
+    this->_responseBuffer.insert(this->_responseBuffer.end(), endChunk,
+                                 endChunk + 5);
+  } else {
     this->_responseBuffer.insert(this->_responseBuffer.end(),
                                  this->_body.begin(), this->_body.end());
+  }
 }
 
 const char* HttpResponse::getData() const {
