@@ -73,6 +73,7 @@ bool HttpResponse::isBodyForbidden(int code) {
 HttpResponse::HttpResponse()
     : _statusCode(200),
       _statusMessage("OK"),
+      _requestMethod(GET),
       _isChunked(false),
       _chunkSize(1024),
       _sentBytes(0) {}
@@ -84,6 +85,7 @@ HttpResponse::HttpResponse(const HttpResponse& other)
       _statusMessage(other._statusMessage),
       _headers(other._headers),
       _body(other._body),
+      _requestMethod(other._requestMethod),
       _isChunked(other._isChunked),
       _chunkSize(other._chunkSize),
       _responseBuffer(other._responseBuffer),
@@ -95,6 +97,7 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
     this->_statusMessage = other._statusMessage;
     this->_headers = other._headers;
     this->_body = other._body;
+    this->_requestMethod = other._requestMethod;
     this->_isChunked = other._isChunked;
     this->_chunkSize = other._chunkSize;
     this->_responseBuffer = other._responseBuffer;
@@ -108,6 +111,7 @@ void HttpResponse::clear() {
   this->_statusMessage = "OK";
   this->_headers.clear();
   this->_body.clear();
+  this->_requestMethod = GET;
   this->_isChunked = false;
   this->_chunkSize = 1024;
   this->_responseBuffer.clear();
