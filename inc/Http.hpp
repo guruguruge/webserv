@@ -85,6 +85,11 @@ class HttpResponse {
   std::string _statusMessage;
   std::map<std::string, std::string> _headers;
   std::vector<char> _body;
+  HttpMethod _requestMethod;
+
+  // Chunked Transfer Encoding関連
+  bool _isChunked;
+  size_t _chunkSize;
 
   // 送信バッファ管理
   std::vector<char> _responseBuffer;  // ヘッダ+ボディの完成形
@@ -104,6 +109,9 @@ class HttpResponse {
   void setBody(const std::vector<char>& body);
   bool setBodyFile(
       const std::string& filepath);  // ファイルを読み込んでBodyにする
+  void setChunked(bool isChunked);
+  // 将来HEADに対応する場合に必要になるので一応
+  void setRequestMethod(HttpMethod method);
 
   // ErrorPage生成用
   void makeErrorResponse(int code, const ServerConfig* config = NULL);
@@ -120,6 +128,7 @@ class HttpResponse {
   // ヘルパー関数
   static std::string getMimeType(const std::string& filepath);
   static std::string buildErrorHtml(int code, const std::string& message);
+  static bool isBodyForbidden(int code);
 
   //debug用: テスト時のみ有効化
 #ifdef ENABLE_TEST_FRIENDS
@@ -134,6 +143,10 @@ class HttpResponse {
                                    const std::string& expMsg);
   friend void inspectClear(const HttpResponse& res);
   friend void inspectReuse(const HttpResponse& res, int expCode);
+  friend std::string getRawBuffer(const HttpResponse& res);
+  friend void inspectChunkedResponse(const HttpResponse& res,
+                                     const std::string& testName,
+                                     size_t originalBodySize);
 #endif
 };
 

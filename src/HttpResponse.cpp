@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "../inc/Http.hpp"
 
 std::string HttpResponse::getMimeType(const std::string& filepath) {
@@ -65,8 +66,18 @@ std::string HttpResponse::buildErrorHtml(int code, const std::string& message) {
   return ss.str();
 }
 
+bool HttpResponse::isBodyForbidden(int code) {
+  // 1xx (Informational), 204 (No Content), 304 (Not Modified)
+  return (code >= 100 && code < 200) || code == 204 || code == 304;
+}
+
 HttpResponse::HttpResponse()
-    : _statusCode(200), _statusMessage("OK"), _sentBytes(0) {}
+    : _statusCode(200),
+      _statusMessage("OK"),
+      _requestMethod(GET),
+      _isChunked(false),
+      _chunkSize(1024),
+      _sentBytes(0) {}
 
 HttpResponse::~HttpResponse() {}
 
@@ -75,6 +86,9 @@ HttpResponse::HttpResponse(const HttpResponse& other)
       _statusMessage(other._statusMessage),
       _headers(other._headers),
       _body(other._body),
+      _requestMethod(other._requestMethod),
+      _isChunked(other._isChunked),
+      _chunkSize(other._chunkSize),
       _responseBuffer(other._responseBuffer),
       _sentBytes(other._sentBytes) {}
 
@@ -84,6 +98,9 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
     this->_statusMessage = other._statusMessage;
     this->_headers = other._headers;
     this->_body = other._body;
+    this->_requestMethod = other._requestMethod;
+    this->_isChunked = other._isChunked;
+    this->_chunkSize = other._chunkSize;
     this->_responseBuffer = other._responseBuffer;
     this->_sentBytes = other._sentBytes;
   }
@@ -95,6 +112,9 @@ void HttpResponse::clear() {
   this->_statusMessage = "OK";
   this->_headers.clear();
   this->_body.clear();
+  this->_requestMethod = GET;
+  this->_isChunked = false;
+  this->_chunkSize = 1024;
   this->_responseBuffer.clear();
   this->_sentBytes = 0;
 }
@@ -174,6 +194,14 @@ bool HttpResponse::setBodyFile(const std::string& filepath) {
   return (true);
 }
 
+void HttpResponse::setChunked(bool isChunked) {
+  this->_isChunked = isChunked;
+}
+
+void HttpResponse::setRequestMethod(HttpMethod method) {
+  this->_requestMethod = method;
+}
+
 void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
   // TODO: configに対応する
   (void)config;
@@ -186,23 +214,33 @@ void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
 }
 
 // builds http response(status line, response header, response body) based on its attributes.
-// status line: "HTTP/1.0 <status code> <status message>\r\n"
+// status line: "HTTP/1.1 <status code> <status message>\r\n"
 // response header: "key: value\r\n" iteration
 // response body: body content
 void HttpResponse::build() {
   this->_responseBuffer.clear();
   this->_sentBytes = 0;
 
-  // if headers has no "Content-Length", calculates body size and '"Content-Length": <body size>' pair.
-  if (!this->_headers.count("Content-Length")) {
-    std::ostringstream len_ss;
-    len_ss << this->_body.size();
-    this->_headers["Content-Length"] = len_ss.str();
+  // Complies to RFC 7230 Section 3.3: handles status codes that forbid message bodies
+  bool hasBody = true;
+  if (isBodyForbidden(this->_statusCode)) {
+    this->_headers.erase("Content-Length");
+    this->_headers.erase("Transfer-Encoding");
+    hasBody = false;
+  } else if (this->_isChunked) {
+    this->_headers.erase("Content-Length");
+    this->_headers["Transfer-Encoding"] = "chunked";
+  } else {
+    if (!this->_headers.count("Content-Length")) {
+      std::ostringstream len_ss;
+      len_ss << this->_body.size();
+      this->_headers["Content-Length"] = len_ss.str();
+    }
   }
 
   // creates status line and response header string
   std::ostringstream ss;
-  ss << "HTTP/1.0 " << this->_statusCode << " " << this->_statusMessage
+  ss << "HTTP/1.1 " << this->_statusCode << " " << this->_statusMessage
      << "\r\n";
   for (std::map<std::string, std::string>::iterator it = this->_headers.begin();
        it != this->_headers.end(); ++it) {
@@ -216,10 +254,39 @@ void HttpResponse::build() {
                                status_line_and_header.begin(),
                                status_line_and_header.end());
 
+  if (!hasBody)
+    return;
+
   // insert response body to buffer
-  if (!this->_body.empty())
+  if (this->_isChunked) {
+    size_t offset = 0;
+    while (offset < this->_body.size()) {
+      size_t currentSize =
+          std::min(this->_chunkSize, this->_body.size() - offset);
+
+      std::ostringstream currentSizeSs;
+      currentSizeSs << std::hex << currentSize << "\r\n";
+      std::string sizeSection = currentSizeSs.str();
+
+      this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                   sizeSection.begin(), sizeSection.end());
+      this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                   this->_body.begin() + offset,
+                                   this->_body.begin() + offset + currentSize);
+
+      const char* crlf = "\r\n";
+      this->_responseBuffer.insert(this->_responseBuffer.end(), crlf, crlf + 2);
+
+      offset += currentSize;
+    }
+
+    const char* endChunk = "0\r\n\r\n";
+    this->_responseBuffer.insert(this->_responseBuffer.end(), endChunk,
+                                 endChunk + 5);
+  } else {
     this->_responseBuffer.insert(this->_responseBuffer.end(),
                                  this->_body.begin(), this->_body.end());
+  }
 }
 
 const char* HttpResponse::getData() const {
