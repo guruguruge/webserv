@@ -230,7 +230,8 @@ void HttpRequest::parseHeaders() {
       // Content-Length の形式チェックとボディ状態の決定
       if (!transferEncoding.empty()) {
         // Transfer-Encoding が指定されている場合は "chunked" のみ許可
-        if (transferEncoding == "chunked") {
+        // RFC 7230: Transfer-Encoding の値は大文字小文字を区別しない
+        if (toLower(transferEncoding) == "chunked") {
           _isChunked = true;
           _parseState = REQ_BODY;
         } else {
