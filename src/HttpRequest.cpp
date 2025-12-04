@@ -75,6 +75,7 @@ void HttpRequest::clear() {
   _headers.clear();
   _body.clear();
   _contentLength = 0;
+  _isChunked = false;
 }
 
 // =============================================================================
@@ -226,10 +227,17 @@ void HttpRequest::parseHeaders() {
         return;
       }
 
-      // Content-Length の形式チェック
-      if (contentLength.empty()) {
+      // Content-Length の形式チェックとボディ状態の決定
+      if (!transferEncoding.empty() &&
+          transferEncoding.find("chunked") != std::string::npos) {
+        // Transfer-Encoding: chunked の場合
+        _isChunked = true;
+        _parseState = REQ_BODY;
+      } else if (contentLength.empty()) {
+        // Content-Length なし → ボディなし
         _parseState = REQ_COMPLETE;
       } else {
+        // Content-Length あり
         // 数値かどうか確認
         if (!isDigitsOnly(contentLength)) {
           setError(ERR_CONTENT_LENGTH_FORMAT);
@@ -283,11 +291,67 @@ void HttpRequest::parseHeaders() {
 }
 
 // =============================================================================
-// parseBody - ボディ解析（TODO: 次ステップで実装）
+// parseBody - ボディ解析のディスパッチャ
 // =============================================================================
 void HttpRequest::parseBody() {
-  // TODO: Content-Length または chunked encoding に基づいてボディを読み取り
-  // 完了したら _parseState = REQ_COMPLETE に遷移
+  if (_isChunked) {
+    parseBodyChunked();
+  } else {
+    parseBodyContentLength();
+  }
+}
+
+// =============================================================================
+// parseBodyContentLength - Content-Length ベースのボディ解析
+// =============================================================================
+void HttpRequest::parseBodyContentLength() {
+  // Content-Length が 0 の場合は即完了
+  if (_contentLength == 0) {
+    _parseState = REQ_COMPLETE;
+    return;
+  }
+
+  // 現在のボディサイズを計算
+  size_t currentBodySize = _body.size();
+  size_t remaining = _contentLength - currentBodySize;
+
+  // バッファから読み取れる分を計算
+  size_t toRead = _buffer.size();
+  if (toRead > remaining) {
+    toRead = remaining;
+  }
+
+  // バッファからボディへ転送
+  if (toRead > 0) {
+    _body.insert(_body.end(), _buffer.begin(), _buffer.begin() + toRead);
+    _buffer.erase(0, toRead);
+  }
+
+  // ボディが完全に読み取れたかチェック
+  if (_body.size() >= _contentLength) {
+    _parseState = REQ_COMPLETE;
+  }
+  // まだ足りない場合は REQ_BODY のまま、次の feed() を待つ
+}
+
+// =============================================================================
+// parseBodyChunked - Transfer-Encoding: chunked のボディ解析
+// =============================================================================
+void HttpRequest::parseBodyChunked() {
+  // TODO: chunked encoding の実装
+  // 各チャンクは以下の形式:
+  //   <chunk-size in hex>\r\n
+  //   <chunk-data>\r\n
+  // 最後のチャンクは:
+  //   0\r\n
+  //   \r\n
+  //
+  // 実装時の考慮事項:
+  // 1. チャンクサイズの16進数パース
+  // 2. チャンクデータの読み取り
+  // 3. 終端チャンク (size=0) の検出
+  // 4. client_max_body_size のチェック (累積サイズ)
+  // 5. trailer headers のスキップ (必要なら)
 }
 
 // =============================================================================

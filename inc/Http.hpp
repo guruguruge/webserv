@@ -44,6 +44,7 @@ class HttpRequest {
   std::map<std::string, std::string> _headers;
   std::vector<char> _body;
   size_t _contentLength;  // Content-Lengthヘッダーの値
+  bool _isChunked;        // Transfer-Encoding: chunked かどうか
 
   // 紐付いた設定（パース完了後にセットされる）
   const ServerConfig* _config;
@@ -52,8 +53,10 @@ class HttpRequest {
   // 内部ヘルパー
   void parseRequestLine();
   void parseHeaders();
-  void parseBody();
-  void setError(ErrorCode err);  // エラー状態をセットしREQ_ERRORに遷移
+  void parseBody();               // ボディ解析のディスパッチャ
+  void parseBodyContentLength();  // Content-Length ベースのボディ解析
+  void parseBodyChunked();        // chunked ベースのボディ解析
+  void setError(ErrorCode err);   // エラー状態をセットしREQ_ERRORに遷移
 
  public:
   HttpRequest();
