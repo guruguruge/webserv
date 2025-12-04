@@ -398,6 +398,11 @@ bool HttpRequest::parseChunkSizeLine() {
   // 1. \r\n を探す
   std::string::size_type pos = _buffer.find("\r\n");
   if (pos == std::string::npos) {
+    // バッファが大きすぎる場合はエラー（無限に待たない）
+    if (_buffer.size() > MAX_LINE_SIZE) {
+      setError(ERR_CONTENT_LENGTH_FORMAT);
+      return false;
+    }
     return false;  // まだ行が揃っていない
   }
 
@@ -490,10 +495,22 @@ bool HttpRequest::parseChunkData() {
 // 戻り値: true=進捗あり, false=データ不足で待機
 // =============================================================================
 bool HttpRequest::parseChunkDataCRLF() {
-  // TODO: 実装
-  // 1. \r\n を確認して消費
-  // 2. CHUNK_SIZE_LINE へ戻る
-  return false;
+  // \r\n の2バイトが必要
+  if (_buffer.size() < 2) {
+    return false;
+  }
+
+  // \r\n を確認
+  if (_buffer[0] != '\r' || _buffer[1] != '\n') {
+    // 不正なチャンクフォーマット
+    setError(ERR_CONTENT_LENGTH_FORMAT);
+    return false;
+  }
+
+  // \r\n を消費して次のチャンクサイズ行へ
+  _buffer.erase(0, 2);
+  _chunkState = CHUNK_SIZE_LINE;
+  return true;
 }
 
 // =============================================================================
@@ -501,10 +518,28 @@ bool HttpRequest::parseChunkDataCRLF() {
 // 戻り値: true=進捗あり, false=データ不足で待機
 // =============================================================================
 bool HttpRequest::parseChunkFinalCRLF() {
-  // TODO: 実装
-  // 1. \r\n なら完了 (REQ_COMPLETE)
-  // 2. それ以外はtrailer headerとしてスキップ
-  return false;
+  // \r\n を探す
+  std::string::size_type pos = _buffer.find("\r\n");
+  if (pos == std::string::npos) {
+    // バッファが大きすぎる場合はエラー（無限に待たない）
+    if (_buffer.size() > MAX_LINE_SIZE) {
+      setError(ERR_HEADER_TOO_LARGE);
+      return false;
+    }
+    return false;  // まだ行が揃っていない
+  }
+
+  // 空行なら完了 (trailerなしまたはtrailer終端)
+  if (pos == 0) {
+    _buffer.erase(0, 2);
+    _parseState = REQ_COMPLETE;
+    return true;
+  }
+
+  // trailer header がある場合はスキップ（無視）
+  // RFC 7230: trailerは無視しても良い
+  _buffer.erase(0, pos + 2);
+  return true;  // 次の行をチェックするためprogress=true
 }
 
 // =============================================================================

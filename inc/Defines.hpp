@@ -7,6 +7,7 @@
 // サーバー全体の定数
 #define MAX_URI_LENGTH 8192
 #define MAX_HEADER_SIZE 16384
+#define MAX_LINE_SIZE 4096  // 1行の最大長（チャンクサイズ行、trailer等）
 #define DEFAULT_CLIENT_MAX_BODY_SIZE 1048576  // 1MB (1024 * 1024)
 
 // 多分これでいい
