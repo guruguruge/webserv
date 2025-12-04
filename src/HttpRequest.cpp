@@ -146,11 +146,56 @@ void HttpRequest::parseRequestLine() {
 }
 
 // =============================================================================
-// parseHeaders - ヘッダー解析（TODO: 次ステップで実装）
+// parseHeaders - ヘッダー解析
 // =============================================================================
 void HttpRequest::parseHeaders() {
-  // TODO: "Header-Name: value\r\n" を解析
-  // 空行 "\r\n" が来たら REQ_BODY or REQ_COMPLETE に遷移
+  // 全てのヘッダー行をループで処理
+  while (true) {
+    // 1. \r\n を探す
+    std::string::size_type pos = _buffer.find("\r\n");
+    if (pos == std::string::npos) {
+      // 見つからなければ return（分割受信に備える）
+      return;
+    }
+
+    // 2. 空行なら → ヘッダー終了、ボディへ遷移
+    if (pos == 0) {
+      _buffer.erase(0, 2);  // 空行 "\r\n" を消す
+      // Content-Length があればボディへ、なければ完了
+      std::string contentLength = getHeader("Content-Length");
+      if (contentLength.empty()) {
+        _parseState = REQ_COMPLETE;
+      } else {
+        _parseState = REQ_BODY;
+      }
+      return;
+    }
+
+    // 3. 1行取り出す
+    std::string line = _buffer.substr(0, pos);
+    _buffer.erase(0, pos + 2);  // \r\n の2バイトも消す
+
+    // 4. ":" で分割して key: value を取得
+    std::string::size_type colonPos = line.find(':');
+    if (colonPos == std::string::npos) {
+      // ":" がない → 不正なヘッダー（無視して次へ）
+      continue;
+    }
+
+    std::string key = line.substr(0, colonPos);
+    std::string value = line.substr(colonPos + 1);
+
+    // 5. value の先頭空白をトリム
+    std::string::size_type start = value.find_first_not_of(" \t");
+    if (start != std::string::npos) {
+      value = value.substr(start);
+    } else {
+      value.clear();
+    }
+
+    // 6. _headers に格納
+    _headers[key] = value;
+  }
 }
 
 // =============================================================================
