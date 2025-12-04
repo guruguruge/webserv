@@ -73,6 +73,7 @@ class HttpRequest {
   bool parseChunkDataCRLF();      // データ後の \r\n を消費
   bool parseChunkFinalCRLF();     // 終端の \r\n を消費
   void setError(ErrorCode err);   // エラー状態をセットしREQ_ERRORに遷移
+  size_t getMaxBodySize() const;  // client_max_body_size を取得
 
  public:
   HttpRequest();

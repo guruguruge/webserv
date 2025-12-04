@@ -136,6 +136,14 @@ void HttpRequest::setError(ErrorCode err) {
 }
 
 // =============================================================================
+// getMaxBodySize - client_max_body_size を取得（ヘルパー）
+// =============================================================================
+size_t HttpRequest::getMaxBodySize() const {
+  return (_config != NULL) ? _config->client_max_body_size
+                           : DEFAULT_CLIENT_MAX_BODY_SIZE;
+}
+
+// =============================================================================
 // parseRequestLine - リクエストライン解析
 // =============================================================================
 void HttpRequest::parseRequestLine() {
@@ -263,9 +271,7 @@ void HttpRequest::parseHeaders() {
           return;
         }
         // client_max_body_size との比較
-        size_t maxBodySize = (_config != NULL) ? _config->client_max_body_size
-                                               : DEFAULT_CLIENT_MAX_BODY_SIZE;
-        if (_contentLength > maxBodySize) {
+        if (_contentLength > getMaxBodySize()) {
           setError(ERR_BODY_TOO_LARGE);
           return;
         }
@@ -389,12 +395,62 @@ void HttpRequest::parseBodyChunked() {
 // 戻り値: true=進捗あり, false=データ不足で待機
 // =============================================================================
 bool HttpRequest::parseChunkSizeLine() {
-  // TODO: 実装
   // 1. \r\n を探す
-  // 2. 16進数文字列をパース
-  // 3. サイズ0なら CHUNK_FINAL_CRLF へ、それ以外は CHUNK_DATA へ
-  // 4. ボディサイズ制限チェック
-  return false;
+  std::string::size_type pos = _buffer.find("\r\n");
+  if (pos == std::string::npos) {
+    return false;  // まだ行が揃っていない
+  }
+
+  // 2. 16進数文字列を取得
+  std::string hexStr = _buffer.substr(0, pos);
+  _buffer.erase(0, pos + 2);
+
+  // chunk-extension がある場合はセミコロン以降を無視 (RFC 7230)
+  std::string::size_type semiPos = hexStr.find(';');
+  if (semiPos != std::string::npos) {
+    hexStr = hexStr.substr(0, semiPos);
+  }
+
+  // 空文字列チェック
+  if (hexStr.empty()) {
+    setError(ERR_CONTENT_LENGTH_FORMAT);
+    return false;
+  }
+
+  // 不正な16進数文字チェック
+  for (std::string::size_type i = 0; i < hexStr.size(); ++i) {
+    char c = hexStr[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+          (c >= 'A' && c <= 'F'))) {
+      setError(ERR_CONTENT_LENGTH_FORMAT);
+      return false;
+    }
+  }
+
+  // 3. std::hex を使って16進数をパース
+  std::istringstream iss(hexStr);
+  iss >> std::hex >> _currentChunkSize;
+  if (iss.fail()) {
+    setError(ERR_CONTENT_LENGTH_FORMAT);
+    return false;
+  }
+
+  // 4. サイズ0なら終端チャンク
+  if (_currentChunkSize == 0) {
+    _chunkState = CHUNK_FINAL_CRLF;
+    return true;
+  }
+
+  // 5. ボディサイズ制限チェック
+  if (_body.size() + _currentChunkSize > getMaxBodySize()) {
+    setError(ERR_BODY_TOO_LARGE);
+    return false;
+  }
+
+  // 6. データ読み取りへ遷移
+  _chunkBytesRead = 0;
+  _chunkState = CHUNK_DATA;
+  return true;
 }
 
 // =============================================================================
