@@ -1,3 +1,4 @@
+#include <cctype>
 #include "../inc/Http.hpp"
 
 // =============================================================================
@@ -12,6 +13,33 @@ static HttpMethod stringToMethod(const std::string& str) {
     return DELETE;
   }
   return UNKNOWN_METHOD;
+}
+
+// =============================================================================
+// ヘルパー関数: 文字列を小文字に変換
+// =============================================================================
+static std::string toLower(const std::string& str) {
+  std::string result = str;
+  for (std::string::size_type i = 0; i < result.size(); ++i) {
+    result[i] =
+        static_cast<char>(std::tolower(static_cast<unsigned char>(result[i])));
+  }
+  return result;
+}
+
+// =============================================================================
+// ヘルパー関数: 文字列が数値のみかチェック
+// =============================================================================
+static bool isDigitsOnly(const std::string& str) {
+  if (str.empty()) {
+    return false;
+  }
+  for (std::string::size_type i = 0; i < str.size(); ++i) {
+    if (str[i] < '0' || str[i] > '9') {
+      return false;
+    }
+  }
+  return true;
 }
 
 // =============================================================================
@@ -35,6 +63,10 @@ void HttpRequest::clear() {
   _buffer.clear();
   _parseState = REQ_REQUEST_LINE;
   _error = ERR_NONE;
+
+  // ヘッダーパース用カウンタリセット
+  _headerCount = 0;
+  _totalHeaderSize = 0;
 
   _method = UNKNOWN_METHOD;
   _path.clear();
@@ -86,6 +118,14 @@ bool HttpRequest::isComplete() const {
 // =============================================================================
 bool HttpRequest::hasError() const {
   return (_parseState == REQ_ERROR || _error != ERR_NONE);
+}
+
+// =============================================================================
+// setError - エラー状態をセットしREQ_ERRORに遷移
+// =============================================================================
+void HttpRequest::setError(ErrorCode err) {
+  _error = err;
+  _parseState = REQ_ERROR;
 }
 
 // =============================================================================
@@ -149,6 +189,8 @@ void HttpRequest::parseRequestLine() {
 // parseHeaders - ヘッダー解析
 // =============================================================================
 void HttpRequest::parseHeaders() {
+  static const size_t MAX_HEADER_COUNT = 100;  // 最大100ヘッダー
+
   // 全てのヘッダー行をループで処理
   while (true) {
     // 1. \r\n を探す
@@ -158,16 +200,42 @@ void HttpRequest::parseHeaders() {
       return;
     }
 
+    // ヘッダーサイズチェック
+    _totalHeaderSize += pos + 2;
+    if (_totalHeaderSize > MAX_HEADER_SIZE) {
+      setError(ERR_HEADER_TOO_LARGE);
+      return;
+    }
+
     // 2. 空行なら → ヘッダー終了、ボディへ遷移
     if (pos == 0) {
       _buffer.erase(0, 2);  // 空行 "\r\n" を消す
-      // Content-Length があればボディへ、なければ完了
+
+      // HTTP/1.1 では Host ヘッダー必須
+      if (_version == "HTTP/1.1" && getHeader("host").empty()) {
+        setError(ERR_MISSING_HOST);
+        return;
+      }
+
+      // Content-Length の形式チェック
       std::string contentLength = getHeader("Content-Length");
       if (contentLength.empty()) {
         _parseState = REQ_COMPLETE;
       } else {
+        // 数値かどうか確認
+        if (!isDigitsOnly(contentLength)) {
+          setError(ERR_CONTENT_LENGTH_FORMAT);
+          return;
+        }
         _parseState = REQ_BODY;
       }
+      return;
+    }
+
+    // ヘッダー行数チェック
+    ++_headerCount;
+    if (_headerCount > MAX_HEADER_COUNT) {
+      setError(ERR_HEADER_TOO_LARGE);
       return;
     }
 
@@ -182,7 +250,7 @@ void HttpRequest::parseHeaders() {
       continue;
     }
 
-    std::string key = line.substr(0, colonPos);
+    std::string key = toLower(line.substr(0, colonPos));
     std::string value = line.substr(colonPos + 1);
 
     // 5. value の先頭空白をトリム
@@ -218,7 +286,8 @@ std::string HttpRequest::getPath() const {
 }
 
 std::string HttpRequest::getHeader(const std::string& key) const {
-  std::map<std::string, std::string>::const_iterator it = _headers.find(key);
+  std::map<std::string, std::string>::const_iterator it =
+      _headers.find(toLower(key));
   if (it != _headers.end()) {
     return it->second;
   }
