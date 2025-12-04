@@ -221,7 +221,7 @@ void HttpResponse::build() {
   this->_responseBuffer.clear();
   this->_sentBytes = 0;
 
-  // complies to RFC
+  // Complies to RFC 7230 Section 3.3: handles status codes that forbid message bodies
   bool hasBody = true;
   if (isBodyForbidden(this->_statusCode)) {
     this->_headers.erase("Content-Length");
@@ -261,11 +261,12 @@ void HttpResponse::build() {
   if (this->_isChunked) {
     size_t offset = 0;
     while (offset < this->_body.size()) {
-      size_t currentSize = std::min(this->_chunkSize, _body.size() - offset);
+      size_t currentSize =
+          std::min(this->_chunkSize, this->_body.size() - offset);
 
-      std::ostringstream ss;
-      ss << std::hex << currentSize << "\r\n";
-      std::string sizeSection = ss.str();
+      std::ostringstream currentSizeSs;
+      currentSizeSs << std::hex << currentSize << "\r\n";
+      std::string sizeSection = currentSizeSs.str();
 
       this->_responseBuffer.insert(this->_responseBuffer.end(),
                                    sizeSection.begin(), sizeSection.end());

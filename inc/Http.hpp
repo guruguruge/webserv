@@ -104,6 +104,7 @@ class HttpResponse {
   bool setBodyFile(
       const std::string& filepath);  // ファイルを読み込んでBodyにする
   void setChunked(bool isChunked);
+  // 将来HEADに対応する場合に必要になるので一応
   void setRequestMethod(HttpMethod method);
 
   // ErrorPage生成用
