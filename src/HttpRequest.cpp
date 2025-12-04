@@ -217,8 +217,15 @@ void HttpRequest::parseHeaders() {
         return;
       }
 
-      // Content-Length の形式チェック
+      // Content-Length と Transfer-Encoding の同時指定は禁止 (RFC 7230)
       std::string contentLength = getHeader("Content-Length");
+      std::string transferEncoding = getHeader("Transfer-Encoding");
+      if (!contentLength.empty() && !transferEncoding.empty()) {
+        setError(ERR_CONFLICTING_HEADERS);
+        return;
+      }
+
+      // Content-Length の形式チェック
       if (contentLength.empty()) {
         _parseState = REQ_COMPLETE;
       } else {
