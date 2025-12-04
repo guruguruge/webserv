@@ -66,7 +66,7 @@ std::string HttpResponse::buildErrorHtml(int code, const std::string& message) {
 }
 
 HttpResponse::HttpResponse()
-    : _statusCode(200), _statusMessage("OK"), _sentBytes(0) {}
+    : _statusCode(200), _statusMessage("OK"), _isChunked(false), _chunkSize(1024), _sentBytes(0) {}
 
 HttpResponse::~HttpResponse() {}
 
@@ -75,6 +75,8 @@ HttpResponse::HttpResponse(const HttpResponse& other)
       _statusMessage(other._statusMessage),
       _headers(other._headers),
       _body(other._body),
+      _isChunked(other._isChunked),
+      _chunkSize(other._chunkSize),
       _responseBuffer(other._responseBuffer),
       _sentBytes(other._sentBytes) {}
 
@@ -84,6 +86,8 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
     this->_statusMessage = other._statusMessage;
     this->_headers = other._headers;
     this->_body = other._body;
+    this->_isChunked = other._isChunked;
+    this->_chunkSize = other._chunkSize;
     this->_responseBuffer = other._responseBuffer;
     this->_sentBytes = other._sentBytes;
   }
@@ -95,6 +99,8 @@ void HttpResponse::clear() {
   this->_statusMessage = "OK";
   this->_headers.clear();
   this->_body.clear();
+  this->_isChunked = false;
+  this->_chunkSize = 1024;
   this->_responseBuffer.clear();
   this->_sentBytes = 0;
 }

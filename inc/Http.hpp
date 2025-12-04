@@ -80,6 +80,10 @@ class HttpResponse {
   std::map<std::string, std::string> _headers;
   std::vector<char> _body;
 
+  // Chunked Transfer Encoding関連
+  bool _isChunked;
+  size_t _chunkSize;
+
   // 送信バッファ管理
   std::vector<char> _responseBuffer;  // ヘッダ+ボディの完成形
   size_t _sentBytes;                  // 送信済みバイト数
