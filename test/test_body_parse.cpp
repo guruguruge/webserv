@@ -422,6 +422,341 @@ void test_NoConfigDefaultLimit() {
 }
 
 // =============================================================================
+// テスト15: 基本的な chunked エンコーディング
+// =============================================================================
+void test_Chunked_Basic() {
+  printSection("Chunked Basic Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /chunked HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "5\r\n"
+      "Hello\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_Basic: Parse Complete", completed == true);
+  printResult("Chunked_Basic: No Error", req.hasError() == false);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("Chunked_Basic: Body Content", bodyStr == "Hello");
+}
+
+// =============================================================================
+// テスト16: 複数チャンク
+// =============================================================================
+void test_Chunked_MultipleChunks() {
+  printSection("Chunked Multiple Chunks Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /multi HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "5\r\n"
+      "Hello\r\n"
+      "1\r\n"
+      " \r\n"
+      "6\r\n"
+      "World!\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_Multiple: Parse Complete", completed == true);
+  printResult("Chunked_Multiple: No Error", req.hasError() == false);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("Chunked_Multiple: Body Content", bodyStr == "Hello World!");
+}
+
+// =============================================================================
+// テスト17: chunked の分割受信
+// =============================================================================
+void test_Chunked_Fragmented() {
+  printSection("Chunked Fragmented Reception Test");
+
+  HttpRequest req;
+
+  // 1回目: ヘッダーとチャンクサイズの一部
+  const char* chunk1 =
+      "POST /frag HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "5\r\n"
+      "Hel";
+
+  bool done1 = req.feed(chunk1, std::strlen(chunk1));
+  printResult("Chunked_Fragmented: Chunk 1 Incomplete", done1 == false);
+  printResult("Chunked_Fragmented: No Error after chunk 1",
+              req.hasError() == false);
+
+  // 2回目: データの続きとCRLF
+  const char* chunk2 = "lo\r\n";
+  bool done2 = req.feed(chunk2, std::strlen(chunk2));
+  printResult("Chunked_Fragmented: Chunk 2 Incomplete", done2 == false);
+
+  // 3回目: 終端チャンク
+  const char* chunk3 = "0\r\n\r\n";
+  bool done3 = req.feed(chunk3, std::strlen(chunk3));
+  printResult("Chunked_Fragmented: Chunk 3 Complete", done3 == true);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("Chunked_Fragmented: Body Content", bodyStr == "Hello");
+}
+
+// =============================================================================
+// テスト18: chunk-extension 付き（セミコロン以降は無視）
+// =============================================================================
+void test_Chunked_WithExtension() {
+  printSection("Chunked With Extension Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /ext HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "5;name=value\r\n"
+      "Hello\r\n"
+      "0;final\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_Extension: Parse Complete", completed == true);
+  printResult("Chunked_Extension: No Error", req.hasError() == false);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("Chunked_Extension: Body Content", bodyStr == "Hello");
+}
+
+// =============================================================================
+// テスト19: trailer header 付き
+// =============================================================================
+void test_Chunked_WithTrailer() {
+  printSection("Chunked With Trailer Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /trailer HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "5\r\n"
+      "Hello\r\n"
+      "0\r\n"
+      "X-Checksum: abc123\r\n"
+      "X-Another: value\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_Trailer: Parse Complete", completed == true);
+  printResult("Chunked_Trailer: No Error", req.hasError() == false);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("Chunked_Trailer: Body Content", bodyStr == "Hello");
+}
+
+// =============================================================================
+// テスト20: chunked でボディサイズ制限を超過
+// =============================================================================
+void test_Chunked_BodyTooLarge() {
+  printSection("Chunked Body Too Large Test");
+
+  ServerConfig config;
+  config.listen_port = 8080;
+  config.host = "127.0.0.1";
+  config.client_max_body_size = 10;
+
+  HttpRequest req;
+  req.setConfig(&config);
+
+  // 制限10バイトに対して15バイト送信
+  const char* raw =
+      "POST /large HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "f\r\n"  // 15バイト
+      "123456789012345\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_TooLarge: Not Complete", completed == false);
+  printResult("Chunked_TooLarge: Has Error", req.hasError() == true);
+}
+
+// =============================================================================
+// テスト21: chunked で累積サイズが制限を超過
+// =============================================================================
+void test_Chunked_CumulativeTooLarge() {
+  printSection("Chunked Cumulative Too Large Test");
+
+  ServerConfig config;
+  config.listen_port = 8080;
+  config.host = "127.0.0.1";
+  config.client_max_body_size = 10;
+
+  HttpRequest req;
+  req.setConfig(&config);
+
+  // 5バイト + 6バイト = 11バイト > 10バイト制限
+  const char* raw =
+      "POST /cumulative HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "5\r\n"
+      "Hello\r\n"
+      "6\r\n"  // この時点で累積11バイトになるのでエラー
+      "World!\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_Cumulative: Not Complete", completed == false);
+  printResult("Chunked_Cumulative: Has Error", req.hasError() == true);
+}
+
+// =============================================================================
+// テスト22: 不正な16進数
+// =============================================================================
+void test_Chunked_InvalidHex() {
+  printSection("Chunked Invalid Hex Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /invalid HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "xyz\r\n"  // 不正な16進数
+      "Hello\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_InvalidHex: Not Complete", completed == false);
+  printResult("Chunked_InvalidHex: Has Error", req.hasError() == true);
+}
+
+// =============================================================================
+// テスト23: チャンクデータ後のCRLFがない
+// =============================================================================
+void test_Chunked_MissingCRLF() {
+  printSection("Chunked Missing CRLF Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /missing HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "5\r\n"
+      "HelloXX";  // \r\n ではなく XX
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_MissingCRLF: Not Complete", completed == false);
+  printResult("Chunked_MissingCRLF: Has Error", req.hasError() == true);
+}
+
+// =============================================================================
+// テスト24: 大文字の16進数
+// =============================================================================
+void test_Chunked_UppercaseHex() {
+  printSection("Chunked Uppercase Hex Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /upper HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "A\r\n"  // 10バイト (大文字)
+      "0123456789\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_UpperHex: Parse Complete", completed == true);
+  printResult("Chunked_UpperHex: No Error", req.hasError() == false);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("Chunked_UpperHex: Body Content", bodyStr == "0123456789");
+}
+
+// =============================================================================
+// テスト25: Transfer-Encoding の大文字小文字混在
+// =============================================================================
+void test_Chunked_CaseInsensitive() {
+  printSection("Chunked Case Insensitive Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /case HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: ChUnKeD\r\n"
+      "\r\n"
+      "5\r\n"
+      "Hello\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_CaseInsensitive: Parse Complete", completed == true);
+  printResult("Chunked_CaseInsensitive: No Error", req.hasError() == false);
+
+  std::vector<char> body = req.getBody();
+  std::string bodyStr(body.begin(), body.end());
+  printResult("Chunked_CaseInsensitive: Body Content", bodyStr == "Hello");
+}
+
+// =============================================================================
+// テスト26: chunked で空のボディ（終端チャンクのみ）
+// =============================================================================
+void test_Chunked_EmptyBody() {
+  printSection("Chunked Empty Body Test");
+
+  HttpRequest req;
+  const char* raw =
+      "POST /empty HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Transfer-Encoding: chunked\r\n"
+      "\r\n"
+      "0\r\n"
+      "\r\n";
+
+  bool completed = req.feed(raw, std::strlen(raw));
+
+  printResult("Chunked_Empty: Parse Complete", completed == true);
+  printResult("Chunked_Empty: No Error", req.hasError() == false);
+  printResult("Chunked_Empty: Body Empty", req.getBody().empty());
+}
+
+// =============================================================================
 // main
 // =============================================================================
 int main() {
@@ -441,6 +776,20 @@ int main() {
   test_BodyExactLimit();
   test_BodyOneByteOver();
   test_NoConfigDefaultLimit();
+
+  // Chunked tests
+  test_Chunked_Basic();
+  test_Chunked_MultipleChunks();
+  test_Chunked_Fragmented();
+  test_Chunked_WithExtension();
+  test_Chunked_WithTrailer();
+  test_Chunked_BodyTooLarge();
+  test_Chunked_CumulativeTooLarge();
+  test_Chunked_InvalidHex();
+  test_Chunked_MissingCRLF();
+  test_Chunked_UppercaseHex();
+  test_Chunked_CaseInsensitive();
+  test_Chunked_EmptyBody();
 
   std::cout << GREEN << "\n=== All Body Parse Tests Passed! ===" << RESET
             << std::endl;
