@@ -42,6 +42,7 @@ class HttpRequest {
   std::string _version;  // HTTP/1.1
   std::map<std::string, std::string> _headers;
   std::vector<char> _body;
+  size_t _contentLength;  // Content-Lengthヘッダーの値
 
   // 紐付いた設定（パース完了後にセットされる）
   const ServerConfig* _config;
@@ -72,6 +73,7 @@ class HttpRequest {
   std::string getPath() const;
   std::string getHeader(const std::string& key) const;
   const std::vector<char>& getBody() const;
+  size_t getContentLength() const;
 
   void setConfig(const ServerConfig* config);
   const ServerConfig* getConfig() const;

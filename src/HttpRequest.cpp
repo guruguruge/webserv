@@ -74,6 +74,7 @@ void HttpRequest::clear() {
   _version.clear();
   _headers.clear();
   _body.clear();
+  _contentLength = 0;
 }
 
 // =============================================================================
@@ -234,6 +235,9 @@ void HttpRequest::parseHeaders() {
           setError(ERR_CONTENT_LENGTH_FORMAT);
           return;
         }
+        // Content-Lengthの値をメンバ変数に代入
+        std::istringstream iss(contentLength);
+        iss >> _contentLength;
         _parseState = REQ_BODY;
       }
       return;
@@ -303,6 +307,10 @@ std::string HttpRequest::getHeader(const std::string& key) const {
 
 const std::vector<char>& HttpRequest::getBody() const {
   return _body;
+}
+
+size_t HttpRequest::getContentLength() const {
+  return _contentLength;
 }
 
 // =============================================================================
