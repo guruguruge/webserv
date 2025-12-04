@@ -54,7 +54,10 @@ HttpRequest::HttpRequest()
       _totalHeaderSize(0),
       _method(UNKNOWN_METHOD),
       _contentLength(0),
-      _isChunked(false) {}
+      _isChunked(false),
+      _chunkState(CHUNK_SIZE_LINE),
+      _currentChunkSize(0),
+      _chunkBytesRead(0) {}
 
 // =============================================================================
 // Destructor
