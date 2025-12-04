@@ -136,6 +136,10 @@ class HttpResponse {
                                    const std::string& expMsg);
   friend void inspectClear(const HttpResponse& res);
   friend void inspectReuse(const HttpResponse& res, int expCode);
+  friend std::string getRawBuffer(const HttpResponse& res);
+  friend void inspectChunkedResponse(const HttpResponse& res,
+                                     const std::string& testName,
+                                     size_t originalBodySize);
 #endif
 };
 
