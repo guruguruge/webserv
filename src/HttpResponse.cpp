@@ -226,9 +226,7 @@ void HttpResponse::build() {
     this->_headers.erase("Content-Length");
     this->_headers.erase("Transfer-Encoding");
     hasBody = false;
-  }
-
-  if (this->_isChunked) {
+  } else if (this->_isChunked) {
     this->_headers.erase("Content-Length");
     this->_headers["Transfer-Encoding"] = "chunked";
   } else {
@@ -255,7 +253,7 @@ void HttpResponse::build() {
                                status_line_and_header.begin(),
                                status_line_and_header.end());
 
-  if (!hasBody || this->_body.empty())
+  if (!hasBody)
     return;
 
   // insert response body to buffer
