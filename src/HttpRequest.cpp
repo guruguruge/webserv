@@ -409,7 +409,7 @@ bool HttpRequest::parseChunkSizeLine() {
   if (pos == std::string::npos) {
     // バッファが大きすぎる場合はエラー（無限に待たない）
     if (_buffer.size() > MAX_LINE_SIZE) {
-      setError(ERR_CONTENT_LENGTH_FORMAT);
+      setError(ERR_INVALID_CHUNK_FORMAT);
       return false;
     }
     return false;  // まだ行が揃っていない
@@ -427,7 +427,7 @@ bool HttpRequest::parseChunkSizeLine() {
 
   // 空文字列チェック
   if (hexStr.empty()) {
-    setError(ERR_CONTENT_LENGTH_FORMAT);
+    setError(ERR_INVALID_CHUNK_FORMAT);
     return false;
   }
 
@@ -436,7 +436,7 @@ bool HttpRequest::parseChunkSizeLine() {
     char c = hexStr[i];
     if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
           (c >= 'A' && c <= 'F'))) {
-      setError(ERR_CONTENT_LENGTH_FORMAT);
+      setError(ERR_INVALID_CHUNK_FORMAT);
       return false;
     }
   }
@@ -444,7 +444,7 @@ bool HttpRequest::parseChunkSizeLine() {
   // オーバーフロー防止: 16進数文字列の長さをチェック
   // size_t は最大16桁 (64bit) または 8桁 (32bit) の16進数
   if (hexStr.size() > sizeof(size_t) * 2) {
-    setError(ERR_CONTENT_LENGTH_FORMAT);
+    setError(ERR_INVALID_CHUNK_FORMAT);
     return false;
   }
 
@@ -452,7 +452,7 @@ bool HttpRequest::parseChunkSizeLine() {
   std::istringstream iss(hexStr);
   iss >> std::hex >> _currentChunkSize;
   if (iss.fail()) {
-    setError(ERR_CONTENT_LENGTH_FORMAT);
+    setError(ERR_INVALID_CHUNK_FORMAT);
     return false;
   }
 
@@ -519,7 +519,7 @@ bool HttpRequest::parseChunkDataCRLF() {
   // \r\n を確認
   if (_buffer[0] != '\r' || _buffer[1] != '\n') {
     // 不正なチャンクフォーマット
-    setError(ERR_CONTENT_LENGTH_FORMAT);
+    setError(ERR_INVALID_CHUNK_FORMAT);
     return false;
   }
 
