@@ -57,7 +57,8 @@ HttpRequest::HttpRequest()
       _isChunked(false),
       _chunkState(CHUNK_SIZE_LINE),
       _currentChunkSize(0),
-      _chunkBytesRead(0) {}
+      _chunkBytesRead(0),
+      _trailerCount(0) {}
 
 // =============================================================================
 // Destructor
@@ -90,6 +91,7 @@ void HttpRequest::clear() {
   _chunkState = CHUNK_SIZE_LINE;
   _currentChunkSize = 0;
   _chunkBytesRead = 0;
+  _trailerCount = 0;
 }
 
 // =============================================================================
@@ -425,6 +427,16 @@ bool HttpRequest::parseChunkSizeLine() {
     hexStr = hexStr.substr(0, semiPos);
   }
 
+  // 先頭と末尾の空白を除去 (RFC 7230 OWS対応)
+  while (!hexStr.empty() &&
+         std::isspace(static_cast<unsigned char>(hexStr[0]))) {
+    hexStr.erase(0, 1);
+  }
+  while (!hexStr.empty() &&
+         std::isspace(static_cast<unsigned char>(hexStr[hexStr.size() - 1]))) {
+    hexStr.erase(hexStr.size() - 1);
+  }
+
   // 空文字列チェック
   if (hexStr.empty()) {
     setError(ERR_INVALID_CHUNK_FORMAT);
@@ -534,6 +546,8 @@ bool HttpRequest::parseChunkDataCRLF() {
 // 戻り値: true=進捗あり, false=データ不足で待機
 // =============================================================================
 bool HttpRequest::parseChunkFinalCRLF() {
+  static const size_t MAX_TRAILER_LINES = 100;  // 最大trailer行数
+
   // \r\n を探す
   std::string::size_type pos = _buffer.find("\r\n");
   if (pos == std::string::npos) {
@@ -552,7 +566,22 @@ bool HttpRequest::parseChunkFinalCRLF() {
     return true;
   }
 
-  // trailer header がある場合はスキップ（無視）
+  // trailer行数制限チェック (DoS対策)
+  ++_trailerCount;
+  if (_trailerCount > MAX_TRAILER_LINES) {
+    setError(ERR_HEADER_TOO_LARGE);
+    return false;
+  }
+
+  // trailerの形式検証: RFC 7230 に従い field-name: field-value 形式
+  std::string line = _buffer.substr(0, pos);
+  if (line.find(':') == std::string::npos) {
+    // 不正なttrailer形式
+    setError(ERR_HEADER_TOO_LARGE);
+    return false;
+  }
+
+  // trailer header をスキップ（無視）
   // RFC 7230: trailerは無視しても良い
   _buffer.erase(0, pos + 2);
   return true;  // 次の行をチェックするためprogress=true
