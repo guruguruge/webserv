@@ -88,10 +88,19 @@ class HttpRequest {
 // ステータスコード等からレスポンスを生データ列に変換する
 class HttpResponse {
  private:
+  enum ResState {
+    RES_HEADER,  // ヘッダー送信中
+    RES_BODY,    // ボディ（ファイル）送信中
+    RES_FINISH,  // 終端チャンク送信中 (Chunked時のみ)
+    RES_DONE     // 全て完了
+  };
+
   int _statusCode;
   std::string _statusMessage;
   std::map<std::string, std::string> _headers;
   std::vector<char> _body;
+  std::ifstream* _bodyFileStream;
+  std::vector<char> _readBuffer;
   HttpMethod _requestMethod;
 
   // Chunked Transfer Encoding関連
