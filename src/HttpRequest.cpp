@@ -441,6 +441,13 @@ bool HttpRequest::parseChunkSizeLine() {
     }
   }
 
+  // オーバーフロー防止: 16進数文字列の長さをチェック
+  // size_t は最大16桁 (64bit) または 8桁 (32bit) の16進数
+  if (hexStr.size() > sizeof(size_t) * 2) {
+    setError(ERR_CONTENT_LENGTH_FORMAT);
+    return false;
+  }
+
   // 3. std::hex を使って16進数をパース
   std::istringstream iss(hexStr);
   iss >> std::hex >> _currentChunkSize;
