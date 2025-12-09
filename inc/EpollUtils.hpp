@@ -8,6 +8,8 @@
 class EpollUtils {
  private:
   int _epoll_fd;
+  EpollUtils(const EpollUtils&);
+  EpollUtils& operator=(const EpollUtils&);
 
  public:
   EpollUtils();
