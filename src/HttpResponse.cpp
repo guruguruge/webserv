@@ -86,7 +86,7 @@ HttpResponse::~HttpResponse() {
 }
 
 HttpResponse::HttpResponse(const HttpResponse& other)
-    : _state(other._state),
+    : _state(RES_HEADER),
       _statusCode(other._statusCode),
       _statusMessage(other._statusMessage),
       _headers(other._headers),
@@ -101,7 +101,7 @@ HttpResponse::HttpResponse(const HttpResponse& other)
 
 HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
   if (this != &other) {
-    this->_state = other._state;
+    this->_state = RES_HEADER;
     this->_statusCode = other._statusCode;
     this->_statusMessage = other._statusMessage;
     this->_headers = other._headers;
@@ -263,7 +263,7 @@ void HttpResponse::build() {
           this->_bodyFileStream->seekg(0, std::ios::beg);
           if (this->_bodyFileStream->fail()) {
             this->_state = RES_ERROR;
-            this->_errorMessage = "Failed to seek file to end";
+            this->_errorMessage = "Failed to seek file to beginning";
             return;
           }
           std::ostringstream lenSs;
