@@ -72,21 +72,28 @@ bool HttpResponse::isBodyForbidden(int code) {
 }
 
 HttpResponse::HttpResponse()
-    : _statusCode(200),
+    : _state(RES_HEADER),
+      _statusCode(200),
       _statusMessage("OK"),
+      _bodyFileStream(NULL),
       _requestMethod(GET),
       _isChunked(false),
       _chunkSize(1024),
       _sentBytes(0) {}
 
-HttpResponse::~HttpResponse() {}
+HttpResponse::~HttpResponse() {
+  delete this->_bodyFileStream;
+}
 
 HttpResponse::HttpResponse(const HttpResponse& other)
-    : _statusCode(other._statusCode),
+    : _state(other._state),
+      _statusCode(other._statusCode),
       _statusMessage(other._statusMessage),
       _headers(other._headers),
       _body(other._body),
+      _bodyFileStream(NULL),
       _requestMethod(other._requestMethod),
+      _errorMessage(other._errorMessage),
       _isChunked(other._isChunked),
       _chunkSize(other._chunkSize),
       _responseBuffer(other._responseBuffer),
@@ -94,11 +101,15 @@ HttpResponse::HttpResponse(const HttpResponse& other)
 
 HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
   if (this != &other) {
+    this->_state = other._state;
     this->_statusCode = other._statusCode;
     this->_statusMessage = other._statusMessage;
     this->_headers = other._headers;
     this->_body = other._body;
+    delete this->_bodyFileStream;
+    this->_bodyFileStream = NULL;
     this->_requestMethod = other._requestMethod;
+    this->_errorMessage = other._errorMessage;
     this->_isChunked = other._isChunked;
     this->_chunkSize = other._chunkSize;
     this->_responseBuffer = other._responseBuffer;
@@ -108,11 +119,15 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
 }
 
 void HttpResponse::clear() {
+  this->_state = RES_HEADER;
   this->_statusCode = 200;
   this->_statusMessage = "OK";
   this->_headers.clear();
   this->_body.clear();
+  delete this->_bodyFileStream;
+  this->_bodyFileStream = NULL;
   this->_requestMethod = GET;
+  this->_errorMessage.clear();
   this->_isChunked = false;
   this->_chunkSize = 1024;
   this->_responseBuffer.clear();
@@ -157,35 +172,24 @@ void HttpResponse::setBody(const std::vector<char>& body) {
   _body = body;
 }
 
-// Reads file and fill _body. if there is no "Content-Type" in _headers, sets "Content-Type" based on extension.
+// Sets the input filestream to _bodyFileStream. if there is no "Content-Type" in _headers, sets "Content-Type" based on extension.
 // inputs:
 //   filepath: input file's filepath
 // returns:
-//   bool: false when filepath is invalid or error occurs while reading, otherwise true
+//   bool: false when allocation fails, filepath is invalid or error occurs while reading, otherwise true.
 bool HttpResponse::setBodyFile(const std::string& filepath) {
-  std::ifstream ifs(filepath.c_str(), std::ios_base::in |
-                                          std::ios_base::binary |
-                                          std::ios_base::ate);
-  if (!ifs.is_open()) {
-    return (false);
+  if (this->_bodyFileStream) {
+    delete this->_bodyFileStream;
+    this->_bodyFileStream = NULL;
   }
 
-  // adjust _body size to the file size
-  std::ifstream::pos_type endPos = ifs.tellg();
-  if (endPos == std::ifstream::pos_type(-1)) {
+  this->_bodyFileStream = new std::ifstream(
+      filepath.c_str(), std::ios_base::in | std::ios_base::binary);
+  if (!this->_bodyFileStream->is_open()) {
+    delete this->_bodyFileStream;
+    this->_bodyFileStream = NULL;
     return (false);
   }
-  std::size_t size = static_cast<std::size_t>(endPos);
-  ifs.seekg(0, std::ios::beg);
-
-  std::vector<char> tmpBody;
-  tmpBody.resize(size);
-  if (size) {
-    ifs.read(&tmpBody[0], size);
-    if (ifs.fail())
-      return (false);
-  }
-  this->_body.swap(tmpBody);
 
   // if there is no content-type in headers, sets extension automatically.
   if (!this->_headers.count("Content-Type"))
@@ -218,74 +222,105 @@ void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {
 // response header: "key: value\r\n" iteration
 // response body: body content
 void HttpResponse::build() {
-  this->_responseBuffer.clear();
-  this->_sentBytes = 0;
+  try {
+    this->_responseBuffer.clear();
+    this->_sentBytes = 0;
 
-  // Complies to RFC 7230 Section 3.3: handles status codes that forbid message bodies
-  bool hasBody = true;
-  if (isBodyForbidden(this->_statusCode)) {
-    this->_headers.erase("Content-Length");
-    this->_headers.erase("Transfer-Encoding");
-    hasBody = false;
-  } else if (this->_isChunked) {
-    this->_headers.erase("Content-Length");
-    this->_headers["Transfer-Encoding"] = "chunked";
-  } else {
-    if (!this->_headers.count("Content-Length")) {
-      std::ostringstream len_ss;
-      len_ss << this->_body.size();
-      this->_headers["Content-Length"] = len_ss.str();
-    }
-  }
-
-  // creates status line and response header string
-  std::ostringstream ss;
-  ss << "HTTP/1.1 " << this->_statusCode << " " << this->_statusMessage
-     << "\r\n";
-  for (std::map<std::string, std::string>::iterator it = this->_headers.begin();
-       it != this->_headers.end(); ++it) {
-    ss << it->first << ": " << it->second << "\r\n";
-  }
-  ss << "\r\n";
-
-  // insert status line and response header string to buffer
-  std::string status_line_and_header = ss.str();
-  this->_responseBuffer.insert(this->_responseBuffer.end(),
-                               status_line_and_header.begin(),
-                               status_line_and_header.end());
-
-  if (!hasBody)
-    return;
-
-  // insert response body to buffer
-  if (this->_isChunked) {
-    size_t offset = 0;
-    while (offset < this->_body.size()) {
-      size_t currentSize =
-          std::min(this->_chunkSize, this->_body.size() - offset);
-
-      std::ostringstream currentSizeSs;
-      currentSizeSs << std::hex << currentSize << "\r\n";
-      std::string sizeSection = currentSizeSs.str();
-
-      this->_responseBuffer.insert(this->_responseBuffer.end(),
-                                   sizeSection.begin(), sizeSection.end());
-      this->_responseBuffer.insert(this->_responseBuffer.end(),
-                                   this->_body.begin() + offset,
-                                   this->_body.begin() + offset + currentSize);
-
-      const char* crlf = "\r\n";
-      this->_responseBuffer.insert(this->_responseBuffer.end(), crlf, crlf + 2);
-
-      offset += currentSize;
+    if (this->_bodyFileStream && this->_bodyFileStream->is_open()) {
+      this->_bodyFileStream->clear();
+      this->_bodyFileStream->seekg(0, std::ios::beg);
     }
 
-    const char* endChunk = "0\r\n\r\n";
-    this->_responseBuffer.insert(this->_responseBuffer.end(), endChunk,
-                                 endChunk + 5);
-  } else {
+    // Complies to RFC 7230 Section 3.3: handles status codes that forbid message bodies
+    bool hasBody = true;
+    if (isBodyForbidden(this->_statusCode)) {
+      this->_headers.erase("Content-Length");
+      this->_headers.erase("Transfer-Encoding");
+      hasBody = false;
+    } else if (this->_isChunked) {
+      this->_headers.erase("Content-Length");
+      this->_headers["Transfer-Encoding"] = "chunked";
+    } else {
+      if (!this->_headers.count("Content-Length")) {
+        if (this->_bodyFileStream && this->_bodyFileStream->is_open()) {
+          this->_bodyFileStream->seekg(0, std::ios::end);
+          std::streampos endPos = this->_bodyFileStream->tellg();
+          this->_bodyFileStream->seekg(0, std::ios::beg);
+          std::ostringstream lenSs;
+          lenSs << endPos;
+          this->_headers["Content-Length"] = lenSs.str();
+        } else {
+          std::ostringstream lenSs;
+          lenSs << this->_body.size();
+          this->_headers["Content-Length"] = lenSs.str();
+        }
+      }
+    }
+
+    // creates status line and response header string
+    std::ostringstream ss;
+    ss << "HTTP/1.1 " << this->_statusCode << " " << this->_statusMessage
+       << "\r\n";
+    for (std::map<std::string, std::string>::iterator it =
+             this->_headers.begin();
+         it != this->_headers.end(); ++it) {
+      ss << it->first << ": " << it->second << "\r\n";
+    }
+    ss << "\r\n";
+
+    // insert status line and response header string to buffer
+    std::string statusLineAndHeader = ss.str();
     this->_responseBuffer.insert(this->_responseBuffer.end(),
-                                 this->_body.begin(), this->_body.end());
+                                 statusLineAndHeader.begin(),
+                                 statusLineAndHeader.end());
+
+    if (!hasBody) {
+      this->_state = RES_DONE;
+      return;
+    }
+
+    if (this->_bodyFileStream && this->_bodyFileStream->is_open()) {
+      this->_state = RES_BODY;
+    } else {
+      // insert response body to buffer
+      if (this->_isChunked) {
+        size_t offset = 0;
+        while (offset < this->_body.size()) {
+          size_t currentSize =
+              std::min(this->_chunkSize, this->_body.size() - offset);
+
+          std::ostringstream currentSizeSs;
+          currentSizeSs << std::hex << currentSize << "\r\n";
+          std::string sizeSection = currentSizeSs.str();
+
+          this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                       sizeSection.begin(), sizeSection.end());
+          this->_responseBuffer.insert(
+              this->_responseBuffer.end(), this->_body.begin() + offset,
+              this->_body.begin() + offset + currentSize);
+
+          const char* crlf = "\r\n";
+          this->_responseBuffer.insert(this->_responseBuffer.end(), crlf,
+                                       crlf + 2);
+
+          offset += currentSize;
+        }
+
+        const char* endChunk = "0\r\n\r\n";
+        this->_responseBuffer.insert(this->_responseBuffer.end(), endChunk,
+                                     endChunk + 5);
+      } else {
+        this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                     this->_body.begin(), this->_body.end());
+      }
+      this->_state = RES_DONE;
+    }
+  } catch (const std::bad_alloc& e) {
+    this->_state = RES_ERROR;
+    this->_errorMessage = "Failed to allocate memory during response build";
+  } catch (const std::exception& e) {
+    this->_state = RES_ERROR;
+    this->_errorMessage = "Unexpected error during response build";
   }
 }
 
@@ -311,8 +346,114 @@ void HttpResponse::advance(size_t n) {
   } else {
     this->_sentBytes += n;
   }
+  if (this->_sentBytes < this->_responseBuffer.size()) {
+    return;
+  }
+
+  this->_responseBuffer.clear();
+  this->_sentBytes = 0;
+
+  if (this->_state == RES_DONE || this->_state == RES_ERROR) {
+    return;
+  }
+
+  if (this->_state == RES_BODY) {
+    if (!this->_bodyFileStream || !this->_bodyFileStream->is_open()) {
+      this->_state = RES_ERROR;
+      this->_errorMessage = "File stream is not open";
+      return;
+    }
+
+    if (this->_readBuffer.size() != this->_chunkSize) {
+      try {
+        this->_readBuffer.resize(this->_chunkSize);
+      } catch (const std::bad_alloc& e) {
+        this->_state = RES_ERROR;
+        this->_errorMessage = "Failed to allocate read buffer";
+        return;
+      }
+    }
+
+    this->_bodyFileStream->read(&this->_readBuffer[0], this->_chunkSize);
+    std::streamsize bytesRead = this->_bodyFileStream->gcount();
+
+    if (this->_bodyFileStream->bad()) {
+      this->_state = RES_ERROR;
+      this->_errorMessage = "File read error occurred";
+      return;
+    }
+
+    if (bytesRead > 0) {
+      try {
+        if (this->_isChunked) {
+          std::ostringstream ss;
+          ss << std::hex << bytesRead << "\r\n";
+          std::string header = ss.str();
+
+          this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                       header.begin(), header.end());
+          this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                       this->_readBuffer.begin(),
+                                       this->_readBuffer.begin() + bytesRead);
+          const char* crlf = "\r\n";
+          this->_responseBuffer.insert(this->_responseBuffer.end(), crlf,
+                                       crlf + 2);
+        } else {
+          this->_responseBuffer.insert(this->_responseBuffer.end(),
+                                       this->_readBuffer.begin(),
+                                       this->_readBuffer.begin() + bytesRead);
+        }
+      } catch (const std::bad_alloc& e) {
+        this->_state = RES_ERROR;
+        this->_errorMessage = "Failed to allocate response buffer";
+        return;
+      } catch (const std::exception& e) {
+        this->_state = RES_ERROR;
+        this->_errorMessage = "Unexpected error during buffer operation";
+        return;
+      }
+    }
+    if (bytesRead < static_cast<std::streamsize>(this->_chunkSize) ||
+        this->_bodyFileStream->eof()) {
+      if (this->_bodyFileStream->is_open()) {
+        this->_bodyFileStream->close();
+      }
+      if (this->_isChunked) {
+        this->_state = RES_FINISH;
+        if (bytesRead > 0)
+          return;
+      } else {
+        this->_state = RES_DONE;
+        return;
+      }
+    } else {
+      return;
+    }
+  }
+  if (this->_state == RES_FINISH) {
+    try {
+
+      const char* endChunk = "0\r\n\r\n";
+      this->_responseBuffer.insert(this->_responseBuffer.end(), endChunk,
+                                   endChunk + 5);
+      this->_state = RES_DONE;
+    } catch (const std::bad_alloc& e) {
+      this->_state = RES_ERROR;
+      this->_errorMessage = "Failed to allocate buffer for end chunk";
+      return;
+    }
+  }
 }
 
 bool HttpResponse::isDone() const {
-  return (this->_sentBytes >= this->_responseBuffer.size());
+  return (this->_state == RES_DONE &&
+          this->_sentBytes >= this->_responseBuffer.size());
+}
+
+bool HttpResponse::isError() const {
+  return (this->_state == RES_ERROR);
+}
+
+std::string HttpResponse::getErrorMessage() const {
+  return this->_errorMessage;
 }

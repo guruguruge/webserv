@@ -89,11 +89,12 @@ class HttpRequest {
 class HttpResponse {
  private:
   enum ResState {
-    RES_HEADER,  // ヘッダー送信中
-    RES_BODY,    // ボディ（ファイル）送信中
-    RES_FINISH,  // 終端チャンク送信中 (Chunked時のみ)
-    RES_DONE     // 全て完了
-  };
+    RES_HEADER,
+    RES_BODY,
+    RES_FINISH,
+    RES_DONE,
+    RES_ERROR,
+  } _state;
 
   int _statusCode;
   std::string _statusMessage;
@@ -102,6 +103,7 @@ class HttpResponse {
   std::ifstream* _bodyFileStream;
   std::vector<char> _readBuffer;
   HttpMethod _requestMethod;
+  std::string _errorMessage;
 
   // Chunked Transfer Encoding関連
   bool _isChunked;
@@ -140,6 +142,8 @@ class HttpResponse {
   size_t getRemainingSize() const;
   void advance(size_t n);  // nバイト送信完了
   bool isDone() const;
+  bool isError() const;
+  std::string getErrorMessage() const;
 
   // ヘルパー関数
   static std::string getMimeType(const std::string& filepath);
