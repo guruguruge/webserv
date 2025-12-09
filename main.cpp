@@ -14,13 +14,16 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <new>
+#include <set>
 #include <vector>
 
 #define MAX_EVENTS 1024
 
 // epollのdata.ptrで扱うためのラッパー構造体
 struct EpollContext {
-  int fd;            // 監視対象のFD
+  int fd;  // 監視対象のFD
+  enum FdType { LISTENER, CLIENT_SOCKET, CGI_PIPE };
   bool is_listener;  // trueならListenSocket, falseならClientSocket
   Client* client;    // Clientの場合のみ有効
   int listen_port;   // Listenerの場合、どのポートか保持
@@ -97,10 +100,17 @@ int main(int argc, char** argv) {
   // Listen Socketのセットアップ
   // Configに含まれるすべてのポートでListenする
   std::vector<int> listen_fds;
+  std::set<int> bound_ports;
+
   for (size_t i = 0; i < config.servers.size(); ++i) {
     int port = config.servers[i].listen_port;
 
-    // 重複ポートのチェックは省略(実実装では必要)
+    if (bound_ports.count(port) > 0) {
+      std::cout << "Port " << port
+                << " is already bound. Skipping socket creation.";
+      continue;
+    }
+
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
       perror("socket");
@@ -109,9 +119,7 @@ int main(int argc, char** argv) {
 
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    struct sockaddr_in addr;
-    std::memset(&addr, 0, sizeof(addr));
+    struct sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(port);
@@ -121,16 +129,22 @@ int main(int argc, char** argv) {
       close(fd);
       continue;
     }
-    if (listen(fd, 128) < 0) {
+    if (listen(fd, SOMAXCONN) < 0) {
       perror("listen");
       close(fd);
       continue;
     }
     setNonBlocking(fd);
 
-    // epoll登録 (Listenerとして)
-    EpollContext* ctx = new EpollContext(fd, port);
-    struct epoll_event ev;
+    EpollContext* ctx;
+    try {
+      ctx = new EpollContext(fd, port);
+    } catch (const std::bad_alloc& e) {
+      perror("new");
+      close(fd);
+      // cleanup and return
+    }
+    struct epoll_event ev = {};
     ev.events = EPOLLIN;
     ev.data.ptr = ctx;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
@@ -143,6 +157,7 @@ int main(int argc, char** argv) {
     listen_fds.push_back(fd);
     std::cout << "Listening on port " << port << " (FD: " << fd << ")"
               << std::endl;
+    bound_ports.insert(port);
   }
 
   // イベントループ
