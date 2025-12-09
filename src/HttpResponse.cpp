@@ -229,6 +229,11 @@ void HttpResponse::build() {
     if (this->_bodyFileStream && this->_bodyFileStream->is_open()) {
       this->_bodyFileStream->clear();
       this->_bodyFileStream->seekg(0, std::ios::beg);
+      if (this->_bodyFileStream->fail()) {
+        this->_state = RES_ERROR;
+        this->_errorMessage = "Failed to seek file stream";
+        return;
+      }
     }
 
     // Complies to RFC 7230 Section 3.3: handles status codes that forbid message bodies
@@ -244,8 +249,23 @@ void HttpResponse::build() {
       if (!this->_headers.count("Content-Length")) {
         if (this->_bodyFileStream && this->_bodyFileStream->is_open()) {
           this->_bodyFileStream->seekg(0, std::ios::end);
+          if (this->_bodyFileStream->fail()) {
+            this->_state = RES_ERROR;
+            this->_errorMessage = "Failed to seek file to end";
+            return;
+          }
           std::streampos endPos = this->_bodyFileStream->tellg();
+          if (endPos == std::streampos(-1)) {
+            this->_state = RES_ERROR;
+            this->_errorMessage = "Failed to determine file size";
+            return;
+          }
           this->_bodyFileStream->seekg(0, std::ios::beg);
+          if (this->_bodyFileStream->fail()) {
+            this->_state = RES_ERROR;
+            this->_errorMessage = "Failed to seek file to end";
+            return;
+          }
           std::ostringstream lenSs;
           lenSs << endPos;
           this->_headers["Content-Length"] = lenSs.str();
