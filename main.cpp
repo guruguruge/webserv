@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
 
     if (bound_ports.count(port) > 0) {
       std::cout << "Port " << port
-                << " is already bound. Skipping socket creation.";
+                << " is already bound. Skipping socket creation." << std::endl;
       continue;
     }
 
@@ -119,7 +119,8 @@ int main(int argc, char** argv) {
 
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    struct sockaddr_in addr = {};
+    struct sockaddr_in addr;
+    std::memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(port);
@@ -142,9 +143,11 @@ int main(int argc, char** argv) {
     } catch (const std::bad_alloc& e) {
       perror("new");
       close(fd);
-      // cleanup and return
+      // fallback needed?
+      return EXIT_FAILURE;
     }
-    struct epoll_event ev = {};
+    struct epoll_event ev;
+    std::memset(&ev, 0, sizeof(ev));
     ev.events = EPOLLIN;
     ev.data.ptr = ctx;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
