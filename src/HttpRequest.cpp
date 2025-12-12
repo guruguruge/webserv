@@ -470,6 +470,7 @@ bool HttpRequest::parseChunkSizeLine() {
 
   // 4. サイズ0なら終端チャンク
   if (_currentChunkSize == 0) {
+    _trailerCount = 0;
     _chunkState = CHUNK_FINAL_CRLF;
     return true;
   }
@@ -576,7 +577,7 @@ bool HttpRequest::parseChunkFinalCRLF() {
   // trailerの形式検証: RFC 7230 に従い field-name: field-value 形式
   std::string line = _buffer.substr(0, pos);
   if (line.find(':') == std::string::npos) {
-    // 不正なttrailer形式
+    // 不正なtrailer形式
     setError(ERR_HEADER_TOO_LARGE);
     return false;
   }
