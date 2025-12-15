@@ -13,18 +13,18 @@
  * 1. リクエストの解析結果(HttpRequest)から適切な処理を決定する
  * 2. 設定(Config)に基づき、パスの解決や権限チェックを行う
  * 3. 処理結果を HttpResponse に書き込む
- * 4. CGIの実行やエラーハンドリングのトリガーを引く
- * 「重要」
- * 処理毎で妥当なConnStateをClientに書き込んでください
+ * 4. Client の状態遷移メソッドを呼び出す (epoll 操作は Client 内部で行われる)
+ *
+ * 注意:
+ * - RequestHandler は EpollUtils を直接操作しない
+ * - 状態遷移は client->readyToWrite() や client->startCgi() を呼ぶ
  */
 class RequestHandler {
  public:
-  // コンストラクタで全体設定を受け取る（参照で保持し、コピーコストを防ぐ）
   RequestHandler(const MainConfig& config);
   ~RequestHandler();
 
   // メインループから呼ばれる唯一のエントリーポイント
-  // 内部でステートを変更したり、レスポンスを構築したりする
   void handle(Client* client);
 
  private:
@@ -39,12 +39,12 @@ class RequestHandler {
   const LocationConfig* _findLocationConfig(const HttpRequest& req,
                                             const ServerConfig& serverConfig);
 
-  // URL (e.g. /index.html) を 実際のファイルパス (e.g. /var/www/html/index.html) に変換
+  // URL を実際のファイルパスに変換
   std::string _resolvePath(const std::string& uri,
                            const LocationConfig* location);
 
   // --- Method Handlers ---
-  // 具体的な処理。必要に応じてClientの状態を変更する
+  // 内部で client->readyToWrite() を呼んで状態遷移する
 
   void _handleGet(Client* client, const std::string& realPath,
                   const LocationConfig* location);
@@ -55,7 +55,7 @@ class RequestHandler {
 
   // --- Specific Features ---
 
-  // CGIの実行処理 (Pipe作成、fork, execve, Client状態のCGI待ちへの変更)
+  // CGIの実行処理 (内部で client->startCgi() を呼ぶ)
   void _handleCgi(Client* client, const std::string& scriptPath,
                   const LocationConfig* location);
 
@@ -65,7 +65,7 @@ class RequestHandler {
   // HTTPリダイレクト処理 (301, 302など)
   void _handleRedirection(Client* client, const LocationConfig* location);
 
-  // エラーレスポンスの生成 (カスタムエラーページ or buildErrorHtml)
+  // エラーレスポンスの生成 (内部で client->readyToWrite() を呼ぶ)
   void _handleError(Client* client, int statusCode);
 
   // --- Utilities ---
@@ -74,7 +74,7 @@ class RequestHandler {
   bool _isFileExist(const std::string& path);
   bool _checkPermission(const std::string& path, const std::string& mode);
 
-  // 禁止コピーコンストラクタ (C++98 style)
+  // Orthodox Canonical Form (コピー禁止)
   RequestHandler(const RequestHandler&);
   RequestHandler& operator=(const RequestHandler&);
 };
