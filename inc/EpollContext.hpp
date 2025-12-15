@@ -15,17 +15,17 @@ class Client;
 struct EpollContext {
   // イベントの種類 (switch で分岐に使用)
   enum FdType {
-    LISTENER,     // リスナーソケット (accept 用)
-    CLIENT,       // クライアントソケット (read/write 用)
-    CGI_STDOUT,   // CGI の標準出力パイプ (read 用)
-    CGI_STDIN     // CGI の標準入力パイプ (write 用)
+    LISTENER,    // リスナーソケット (accept 用)
+    CLIENT,      // クライアントソケット (read/write 用)
+    CGI_STDOUT,  // CGI の標準出力パイプ (read 用)
+    CGI_STDIN    // CGI の標準入力パイプ (write 用)
   };
 
   FdType type;
 
   // type によって使い分ける (union 的な使い方)
-  Client* client;     // CLIENT, CGI_* の場合に有効
-  int listen_port;    // LISTENER の場合に有効
+  Client* client;   // CLIENT, CGI_* の場合に有効
+  int listen_port;  // LISTENER の場合に有効
 
   // --- ファクトリメソッド ---
 

@@ -47,11 +47,11 @@ class Client {
   // --- 状態遷移メソッド (epoll 操作を内部で行う) ---
   // RequestHandler はこれらを呼ぶだけで OK
 
-  void readyToWrite();   // WRITING_RESPONSE へ遷移 + EPOLLOUT 設定
-  void readyToRead();    // リクエスト待ちへ遷移 + EPOLLIN 設定 (Keep-Alive)
+  void readyToWrite();  // WRITING_RESPONSE へ遷移 + EPOLLOUT 設定
+  void readyToRead();   // リクエスト待ちへ遷移 + EPOLLIN 設定 (Keep-Alive)
   void startCgi(const std::string& scriptPath);  // CGI 実行開始
-  void finishCgi();      // CGI 完了処理
-  void markClose();      // 接続終了マーク
+  void finishCgi();                              // CGI 完了処理
+  void markClose();                              // 接続終了マーク
 
   // --- CGI 情報アクセス (main.cpp から使用) ---
   pid_t getCgiPid() const;
@@ -59,6 +59,10 @@ class Client {
   int getCgiStdinFd() const;
   void appendCgiOutput(const char* buf, size_t len);
   const std::string& getCgiOutput() const;
+
+  // CGI stdin オフセット管理 (部分書き込み対応)
+  size_t getCgiStdinOffset() const;
+  void advanceCgiStdinOffset(size_t bytes);
 
   // --- Context 管理 ---
   void setContext(EpollContext* ctx);
@@ -68,21 +72,23 @@ class Client {
   void reset();
 
  private:
-  int _fd;            // 接続済みソケットFD
+  int _fd;  // 接続済みソケットFD
   std::string _ip;
-  int _listenPort;    // どのポートで受けたか（Config検索用）
+  int _listenPort;  // どのポートで受けたか（Config検索用）
 
-  EpollUtils* _epoll;       // epoll 操作用 (参照)
-  EpollContext* _context;   // 自身の EpollContext
+  EpollUtils* _epoll;      // epoll 操作用 (参照)
+  EpollContext* _context;  // 自身の EpollContext
 
   ConnState _state;
-  time_t _lastActivity;     // タイムアウト判定用
+  time_t _lastActivity;  // タイムアウト判定用
 
   // --- CGI 関連 ---
   pid_t _cgi_pid;           // CGI の子プロセス ID (初期値 -1)
   int _cgi_stdout_fd;       // CGI stdout パイプ (初期値 -1)
   int _cgi_stdin_fd;        // CGI stdin パイプ (初期値 -1)
   std::string _cgi_output;  // CGI 出力バッファ
+  size_t
+      _cgi_stdin_offset;  // CGI stdin 書き込み済みオフセット (部分書き込み対応)
 
   // --- CGI 内部ヘルパー ---
   void _cleanupCgi();

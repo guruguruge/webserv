@@ -26,22 +26,18 @@
 #include "../inc/EpollUtils.hpp"
 #include "../inc/RequestHandler.hpp"
 
-// ========================================
 // 定数
-// ========================================
+
 static const int MAX_EVENTS = 64;
-static const int TIMEOUT_MS = 1000;        // epoll_wait タイムアウト
-static const time_t CLIENT_TIMEOUT = 60;   // クライアントタイムアウト (秒)
+static const int TIMEOUT_MS = 1000;       // epoll_wait タイムアウト
+static const time_t CLIENT_TIMEOUT = 60;  // クライアントタイムアウト (秒)
 static const int RECV_BUFFER_SIZE = 4096;
 
-// ========================================
 // グローバル変数 (シグナルハンドラ用)
-// ========================================
+
 static volatile sig_atomic_t g_running = 1;
 
-// ========================================
 // ユーティリティ関数
-// ========================================
 
 static void signalHandler(int sig) {
   (void)sig;
@@ -63,9 +59,7 @@ static std::string getClientIp(struct sockaddr_in* addr) {
   return std::string(ip);
 }
 
-// ========================================
 // Listener ソケット作成
-// ========================================
 
 static int createListenerSocket(int port) {
   int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -110,9 +104,7 @@ static int createListenerSocket(int port) {
   return sock;
 }
 
-// ========================================
 // イベントハンドラ
-// ========================================
 
 static void handleListenerEvent(EpollContext* ctx, int listener_fd,
                                 EpollUtils& epoll,
@@ -120,9 +112,8 @@ static void handleListenerEvent(EpollContext* ctx, int listener_fd,
   struct sockaddr_in client_addr;
   socklen_t addr_len = sizeof(client_addr);
 
-  int conn_fd =
-      accept(listener_fd, reinterpret_cast<struct sockaddr*>(&client_addr),
-             &addr_len);
+  int conn_fd = accept(
+      listener_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &addr_len);
   if (conn_fd < 0) {
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
       std::cerr << "⚠️ accept() failed: " << strerror(errno) << std::endl;
@@ -224,8 +215,8 @@ static void handleClientWriteEvent(Client* client, EpollUtils& epoll,
                   << client->getFd() << ")" << std::endl;
       } else {
         // 接続終了
-        std::cout << "📤 Response sent, closing connection (fd=" << client->getFd()
-                  << ")" << std::endl;
+        std::cout << "📤 Response sent, closing connection (fd="
+                  << client->getFd() << ")" << std::endl;
         epoll.del(client->getFd());
         clients.erase(client->getFd());
         delete client->getContext();
@@ -278,24 +269,31 @@ static void handleCgiStdinEvent(EpollContext* ctx, EpollUtils& epoll) {
 
   // POST ボディを CGI に書き込む
   const std::vector<char>& body = client->req.getBody();
-  if (body.empty()) {
-    // 書き込むデータがない
+  size_t offset = client->getCgiStdinOffset();
+
+  if (body.empty() || offset >= body.size()) {
+    // 書き込むデータがない or 全て書き込み完了
     epoll.del(client->getCgiStdinFd());
     close(client->getCgiStdinFd());
     delete ctx;
     return;
   }
 
-  ssize_t written = write(client->getCgiStdinFd(), &body[0], body.size());
+  // 残りのデータを書き込み
+  size_t remaining = body.size() - offset;
+  ssize_t written = write(client->getCgiStdinFd(), &body[offset], remaining);
 
   if (written > 0) {
-    // TODO: 部分書き込み対応 (オフセット管理)
-    // 現状は一括書き込みを仮定
+    client->advanceCgiStdinOffset(static_cast<size_t>(written));
 
-    // 書き込み完了したらパイプを閉じる
-    epoll.del(client->getCgiStdinFd());
-    close(client->getCgiStdinFd());
-    delete ctx;
+    // 全て書き込み完了したかチェック
+    if (client->getCgiStdinOffset() >= body.size()) {
+      // 書き込み完了 → パイプを閉じる
+      epoll.del(client->getCgiStdinFd());
+      close(client->getCgiStdinFd());
+      delete ctx;
+    }
+    // まだ残りがある場合は次の EPOLLOUT を待つ
   } else if (written < 0) {
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
       std::cerr << "⚠️ CGI write error: " << strerror(errno) << std::endl;
@@ -306,9 +304,7 @@ static void handleCgiStdinEvent(EpollContext* ctx, EpollUtils& epoll) {
   }
 }
 
-// ========================================
 // タイムアウト処理
-// ========================================
 
 static void checkTimeouts(std::map<int, Client*>& clients, EpollUtils& epoll) {
   std::map<int, Client*>::iterator it = clients.begin();
@@ -327,9 +323,7 @@ static void checkTimeouts(std::map<int, Client*>& clients, EpollUtils& epoll) {
   }
 }
 
-// ========================================
 // メインループ
-// ========================================
 
 static void eventLoop(EpollUtils& epoll, RequestHandler& handler,
                       std::map<int, Client*>& clients,
@@ -349,8 +343,7 @@ static void eventLoop(EpollUtils& epoll, RequestHandler& handler,
 
     // イベント処理
     for (int i = 0; i < nfds; ++i) {
-      EpollContext* ctx =
-          static_cast<EpollContext*>(events[i].data.ptr);
+      EpollContext* ctx = static_cast<EpollContext*>(events[i].data.ptr);
 
       switch (ctx->type) {
         case EpollContext::LISTENER: {
@@ -387,9 +380,7 @@ static void eventLoop(EpollUtils& epoll, RequestHandler& handler,
   }
 }
 
-// ========================================
 // メイン関数
-// ========================================
 
 int main(int argc, char** argv) {
   // シグナルハンドラ設定
@@ -403,22 +394,19 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // ========================================
   // 設定読み込み
-  // ========================================
+
   MainConfig config;
   // TODO: config.parse(argv[1]);
   // 仮のデフォルト設定
   std::cout << "📄 Loading config: " << argv[1] << std::endl;
 
-  // ========================================
   // epoll 初期化
-  // ========================================
+
   EpollUtils epoll;
 
-  // ========================================
   // Listener ソケット作成
-  // ========================================
+
   std::map<int, int> listener_fds;  // port -> fd
 
   // TODO: config から複数ポートを取得
@@ -434,25 +422,21 @@ int main(int argc, char** argv) {
   EpollContext* listener_ctx = EpollContext::createListener(default_port);
   epoll.add(listener_fd, listener_ctx, EPOLLIN);
 
-  // ========================================
   // RequestHandler 初期化
-  // ========================================
+
   RequestHandler handler(config);
 
-  // ========================================
   // Client 管理マップ
-  // ========================================
+
   std::map<int, Client*> clients;
 
-  // ========================================
   // イベントループ開始
-  // ========================================
+
   std::cout << "🚀 Server started. Press Ctrl+C to stop." << std::endl;
   eventLoop(epoll, handler, clients, listener_fds);
 
-  // ========================================
   // クリーンアップ
-  // ========================================
+
   std::cout << "🧹 Cleaning up..." << std::endl;
 
   // クライアント解放
