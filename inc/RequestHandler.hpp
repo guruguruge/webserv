@@ -41,6 +41,7 @@ class RequestHandler {
 
   // URL (e.g. /index.html) を 実際のファイルパス (e.g. /var/www/html/index.html) に変換
   std::string _resolvePath(const std::string& uri,
+                           const ServerConfig& serverConfig,
                            const LocationConfig* location);
 
   // --- Method Handlers ---

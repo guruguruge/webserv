@@ -22,6 +22,7 @@ struct LocationConfig {
 // Serverブロック (ポート、サーバー名ごとの設定)
 struct ServerConfig {
   int listen_port;
+  std::string root;
   std::string host;                        // ex: "127.0.0.1"
   std::vector<std::string> server_names;   // ex: "example.com"
   std::map<int, std::string> error_pages;  // 404 -> "/404.html"
