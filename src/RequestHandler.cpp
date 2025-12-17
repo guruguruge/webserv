@@ -4,6 +4,45 @@ RequestHandler::RequestHandler(const MainConfig& config) : _config(config) {}
 
 RequestHandler::~RequestHandler() {}
 
+static std::string normalizeUri(const std::string& uri) {
+  std::vector<std::string> parts;
+  std::string::size_type start = 0;
+  std::string::size_type end;
+
+  while ((end = uri.find('/', start)) != std::string::npos) {
+    std::string part = uri.substr(start, end - start);
+    if (!part.empty() && part != ".") {
+      if (part == "..") {
+        if (!parts.empty())
+          parts.pop_back();
+      } else {
+        parts.push_back(part);
+      }
+    }
+    start = end + 1;
+  }
+  if (start < uri.length()) {
+    std::string part = uri.substr(start);
+    if (!part.empty() && part != ".") {
+      if (part == "..") {
+        if (!parts.empty())
+          parts.pop_back();
+      } else {
+        parts.push_back(part);
+      }
+    }
+  }
+
+  if (parts.empty()) {
+    return "/";
+  }
+  std::string normalized;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    normalized += "/" + parts[i];
+  }
+  return normalized;
+}
+
 void RequestHandler::handle(Client* client) {
   if (!client)
     return;
@@ -74,7 +113,7 @@ const LocationConfig* RequestHandler::_findLocationConfig(
 
   const LocationConfig* bestPrefixMatch = NULL;
   size_t maxPrefixLength = 0;
-  std::string uri = req.getPath();
+  std::string uri = normalizeUri(req.getPath());
   for (std::vector<LocationConfig>::const_iterator it =
            serverConfig.locations.begin();
        it != serverConfig.locations.end(); ++it) {
@@ -128,16 +167,18 @@ const LocationConfig* RequestHandler::_findLocationConfig(
 std::string RequestHandler::_resolvePath(const std::string& uri,
                                          const ServerConfig& serverConfig,
                                          const LocationConfig* location) {
+  std::string normalizedUri = normalizeUri(uri);
   if (!location) {
-    return serverConfig.root + uri;
+    return serverConfig.root + normalizedUri;
   }
-  std::string path = uri;
-  if (!location->alias.empty()) {
+  std::string path = normalizedUri;
+  if (!location->alias.empty() &&
+      path.compare(0, location->path.length(), location->path) == 0) {
     path.replace(0, location->path.length(), location->alias);
   } else {
     std::string root =
         location->root.empty() ? serverConfig.root : location->root;
-    path = root + uri;
+    path = root + normalizedUri;
   }
   return path;
 }
