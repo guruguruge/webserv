@@ -19,7 +19,8 @@ void RequestHandler::handle(Client* client) {
   const LocationConfig* matchedLocation =
       _findLocationConfig(client->req, *matchedServer);
 
-  std::string realPath = _resolvePath(client->req.getPath(), matchedLocation);
+  std::string realPath =
+      _resolvePath(client->req.getPath(), *matchedServer, matchedLocation);
 
   switch (req.getMethod()) {
     case GET:
@@ -123,14 +124,17 @@ const LocationConfig* RequestHandler::_findLocationConfig(
 }
 
 std::string RequestHandler::_resolvePath(const std::string& uri,
+                                         const ServerConfig& serverConfig,
                                          const LocationConfig* location) {
   if (!location) {
-    return "." + uri;
+    return serverConfig.root + uri;
   }
   std::string path = uri;
   if (!location->alias.empty()) {
     path.replace(0, location->path.length(), location->alias);
   } else {
+    std::string root =
+        location->root.empty() ? serverConfig.root : location->root;
     path = location->root + uri;
   }
   return path;
