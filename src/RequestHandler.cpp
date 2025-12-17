@@ -78,6 +78,10 @@ const LocationConfig* RequestHandler::_findLocationConfig(
            serverConfig.locations.begin();
        it != serverConfig.locations.end(); ++it) {
     if (uri.compare(0, it->path.length(), it->path) == 0) {
+      if (uri.length() > it->path.length() &&
+          it->path[it->path.length() - 1] != '/' &&
+          uri[it->path.length() - 1] != '/')
+        continue;
       if (it->path.length() > maxPrefixLength) {
         maxPrefixLength = it->path.length();
         bestPrefixMatch = &(*it);
