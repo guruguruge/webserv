@@ -265,6 +265,15 @@ bool HttpRequestParser::parseChunkSize() {
     line = line.substr(0, semicolonPos);
   }
 
+  // 先頭と末尾の空白を除去
+  while (!line.empty() && std::isspace(static_cast<unsigned char>(line[0]))) {
+    line.erase(0, 1);
+  }
+  while (!line.empty() &&
+         std::isspace(static_cast<unsigned char>(line[line.size() - 1]))) {
+    line.erase(line.size() - 1);
+  }
+
   // 16進数をパース
   std::istringstream iss(line);
   if (!(iss >> std::hex >> _currentChunkSize)) {
