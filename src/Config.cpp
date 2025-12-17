@@ -4,6 +4,9 @@
 // LocationConfig
 // ============================================================================
 
+/**
+ * @brief LocationConfigのデフォルトコンストラクタ
+ */
 LocationConfig::LocationConfig()
     : path("/"),
       root(""),
@@ -21,12 +24,19 @@ LocationConfig::LocationConfig()
 // ServerConfig
 // ============================================================================
 
+/**
+ * @brief ServerConfigのデフォルトコンストラクタ
+ */
 ServerConfig::ServerConfig()
     : listen_port(80),
       host("0.0.0.0"),
       client_max_body_size(DEFAULT_CLIENT_MAX_BODY_SIZE) {}
 
-// 最長プレフィックスマッチでLocationConfigを返す
+/**
+ * @brief パスに最も長くマッチするLocationを返す
+ * @param path リクエストのURLパス
+ * @return マッチしたLocationConfigへのポインタ、マッチなしの場合はNULL
+ */
 const LocationConfig* ServerConfig::getLocation(const std::string& path) const {
   const LocationConfig* best_match = NULL;
   size_t best_match_len = 0;
@@ -60,17 +70,39 @@ const LocationConfig* ServerConfig::getLocation(const std::string& path) const {
 // MainConfig
 // ============================================================================
 
+/**
+ * @brief MainConfigのデフォルトコンストラクタ
+ */
 MainConfig::MainConfig() {}
 
+/**
+ * @brief MainConfigのデストラクタ
+ */
 MainConfig::~MainConfig() {}
 
+/**
+ * @brief 設定ファイルをロードする
+ * @param file_path 設定ファイルのパス
+ * @return 成功時true、失敗時false
+ */
 bool MainConfig::load(const std::string& file_path) {
   // TODO: ConfigParser実装後に完成させる
   (void)file_path;
   return false;
 }
 
-// Hostヘッダを正規化する（ポート除去、小文字化、末尾ドット除去）
+/**
+ * @brief Hostヘッダを正規化する
+ *
+ * 以下の変換を行う:
+ * - 末尾の '.' を除去 (FQDN対応)
+ * - ポート番号を除去 ("example.com:8080" -> "example.com")
+ * - IPv6アドレスのポート除去 ("[::1]:8080" -> "[::1]")
+ * - 小文字化 (DNS名は大文字小文字を区別しない)
+ *
+ * @param host 正規化前のHostヘッダ値
+ * @return 正規化後のホスト名
+ */
 static std::string normalizeHost(const std::string& host) {
   std::string normalized = host;
 
@@ -105,7 +137,12 @@ static std::string normalizeHost(const std::string& host) {
   return normalized;
 }
 
-// Hostヘッダとポート番号から最適なServerConfigを返す
+/**
+ * @brief Hostヘッダとポート番号から最適なServerConfigを特定する
+ * @param host Hostヘッダの値
+ * @param port リクエストを受けたポート番号
+ * @return マッチしたServerConfigへのポインタ、serversが空の場合はNULL
+ */
 const ServerConfig* MainConfig::getServer(const std::string& host,
                                           int port) const {
   // serversが空の場合はNULLを返す
