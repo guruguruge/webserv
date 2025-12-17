@@ -54,7 +54,11 @@ HttpRequest::HttpRequest()
       _totalHeaderSize(0),
       _method(UNKNOWN_METHOD),
       _contentLength(0),
-      _isChunked(false) {}
+      _isChunked(false),
+      _chunkState(CHUNK_SIZE_LINE),
+      _currentChunkSize(0),
+      _chunkBytesRead(0),
+      _trailerCount(0) {}
 
 // =============================================================================
 // Destructor
@@ -84,6 +88,10 @@ void HttpRequest::clear() {
   _contentLength = 0;
   _isChunked = false;
   _location = NULL;
+  _chunkState = CHUNK_SIZE_LINE;
+  _currentChunkSize = 0;
+  _chunkBytesRead = 0;
+  _trailerCount = 0;
 }
 
 // =============================================================================
@@ -136,6 +144,14 @@ bool HttpRequest::hasError() const {
 void HttpRequest::setError(ErrorCode err) {
   _error = err;
   _parseState = REQ_ERROR;
+}
+
+// =============================================================================
+// getMaxBodySize - client_max_body_size を取得（ヘルパー）
+// =============================================================================
+size_t HttpRequest::getMaxBodySize() const {
+  return (_config != NULL) ? _config->client_max_body_size
+                           : DEFAULT_CLIENT_MAX_BODY_SIZE;
 }
 
 // =============================================================================
@@ -266,9 +282,7 @@ void HttpRequest::parseHeaders() {
           return;
         }
         // client_max_body_size との比較
-        size_t maxBodySize = (_config != NULL) ? _config->client_max_body_size
-                                               : DEFAULT_CLIENT_MAX_BODY_SIZE;
-        if (_contentLength > maxBodySize) {
+        if (_contentLength > getMaxBodySize()) {
           setError(ERR_BODY_TOO_LARGE);
           return;
         }
@@ -361,20 +375,217 @@ void HttpRequest::parseBodyContentLength() {
 // parseBodyChunked - Transfer-Encoding: chunked のボディ解析
 // =============================================================================
 void HttpRequest::parseBodyChunked() {
-  // TODO: chunked encoding の実装
-  // 各チャンクは以下の形式:
-  //   <chunk-size in hex>\r\n
-  //   <chunk-data>\r\n
-  // 最後のチャンクは:
-  //   0\r\n
-  //   \r\n
-  //
-  // 実装時の考慮事項:
-  // 1. チャンクサイズの16進数パース
-  // 2. チャンクデータの読み取り
-  // 3. 終端チャンク (size=0) の検出
-  // 4. client_max_body_size のチェック (累積サイズ)
-  // 5. trailer headers のスキップ (必要なら)
+  bool progress = true;
+
+  while (progress && _parseState == REQ_BODY) {
+    progress = false;
+
+    switch (_chunkState) {
+      case CHUNK_SIZE_LINE:
+        if (parseChunkSizeLine())
+          progress = true;
+        break;
+      case CHUNK_DATA:
+        if (parseChunkData())
+          progress = true;
+        break;
+      case CHUNK_DATA_CRLF:
+        if (parseChunkDataCRLF())
+          progress = true;
+        break;
+      case CHUNK_FINAL_CRLF:
+        if (parseChunkFinalCRLF())
+          progress = true;
+        break;
+    }
+  }
+}
+
+// =============================================================================
+// parseChunkSizeLine - チャンクサイズ行 "<hex>\r\n" をパース
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkSizeLine() {
+  // 1. \r\n を探す
+  std::string::size_type pos = _buffer.find("\r\n");
+  if (pos == std::string::npos) {
+    // バッファが大きすぎる場合はエラー（無限に待たない）
+    if (_buffer.size() > MAX_LINE_SIZE) {
+      setError(ERR_INVALID_CHUNK_FORMAT);
+      return false;
+    }
+    return false;  // まだ行が揃っていない
+  }
+
+  // 2. 16進数文字列を取得
+  std::string hexStr = _buffer.substr(0, pos);
+  _buffer.erase(0, pos + 2);
+
+  // chunk-extension がある場合はセミコロン以降を無視 (RFC 7230)
+  std::string::size_type semiPos = hexStr.find(';');
+  if (semiPos != std::string::npos) {
+    hexStr = hexStr.substr(0, semiPos);
+  }
+
+  // 先頭と末尾の空白を除去 (RFC 7230 OWS対応)
+  while (!hexStr.empty() &&
+         std::isspace(static_cast<unsigned char>(hexStr[0]))) {
+    hexStr.erase(0, 1);
+  }
+  while (!hexStr.empty() &&
+         std::isspace(static_cast<unsigned char>(hexStr[hexStr.size() - 1]))) {
+    hexStr.erase(hexStr.size() - 1);
+  }
+
+  // 空文字列チェック
+  if (hexStr.empty()) {
+    setError(ERR_INVALID_CHUNK_FORMAT);
+    return false;
+  }
+
+  // 不正な16進数文字チェック
+  for (std::string::size_type i = 0; i < hexStr.size(); ++i) {
+    char c = hexStr[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+          (c >= 'A' && c <= 'F'))) {
+      setError(ERR_INVALID_CHUNK_FORMAT);
+      return false;
+    }
+  }
+
+  // オーバーフロー防止: 16進数文字列の長さをチェック
+  // size_t は最大16桁 (64bit) または 8桁 (32bit) の16進数
+  if (hexStr.size() > sizeof(size_t) * 2) {
+    setError(ERR_INVALID_CHUNK_FORMAT);
+    return false;
+  }
+
+  // 3. std::hex を使って16進数をパース
+  std::istringstream iss(hexStr);
+  iss >> std::hex >> _currentChunkSize;
+  if (iss.fail()) {
+    setError(ERR_INVALID_CHUNK_FORMAT);
+    return false;
+  }
+
+  // 4. サイズ0なら終端チャンク
+  if (_currentChunkSize == 0) {
+    _trailerCount = 0;
+    _chunkState = CHUNK_FINAL_CRLF;
+    return true;
+  }
+
+  // 5. ボディサイズ制限チェック
+  if (_body.size() + _currentChunkSize > getMaxBodySize()) {
+    setError(ERR_BODY_TOO_LARGE);
+    return false;
+  }
+
+  // 6. データ読み取りへ遷移
+  _chunkBytesRead = 0;
+  _chunkState = CHUNK_DATA;
+  return true;
+}
+
+// =============================================================================
+// parseChunkData - チャンクデータを読み取り
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkData() {
+  // バッファが空なら待機
+  if (_buffer.empty()) {
+    return false;
+  }
+
+  // 残り読み取るべきバイト数
+  size_t remaining = _currentChunkSize - _chunkBytesRead;
+
+  // バッファから読み取れる分を計算
+  size_t toRead = _buffer.size();
+  if (toRead > remaining) {
+    toRead = remaining;
+  }
+
+  // バッファからボディへ転送
+  _body.insert(_body.end(), _buffer.begin(), _buffer.begin() + toRead);
+  _buffer.erase(0, toRead);
+  _chunkBytesRead += toRead;
+
+  // このチャンクを読み終えたら CHUNK_DATA_CRLF へ
+  if (_chunkBytesRead == _currentChunkSize) {
+    _chunkState = CHUNK_DATA_CRLF;
+  }
+
+  return true;
+}
+
+// =============================================================================
+// parseChunkDataCRLF - チャンクデータ後の \r\n を消費
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkDataCRLF() {
+  // \r\n の2バイトが必要
+  if (_buffer.size() < 2) {
+    return false;
+  }
+
+  // \r\n を確認
+  if (_buffer[0] != '\r' || _buffer[1] != '\n') {
+    // 不正なチャンクフォーマット
+    setError(ERR_INVALID_CHUNK_FORMAT);
+    return false;
+  }
+
+  // \r\n を消費して次のチャンクサイズ行へ
+  _buffer.erase(0, 2);
+  _chunkState = CHUNK_SIZE_LINE;
+  return true;
+}
+
+// =============================================================================
+// parseChunkFinalCRLF - 終端チャンク後の \r\n を消費 (trailer対応)
+// 戻り値: true=進捗あり, false=データ不足で待機
+// =============================================================================
+bool HttpRequest::parseChunkFinalCRLF() {
+  static const size_t MAX_TRAILER_LINES = 100;  // 最大trailer行数
+
+  // \r\n を探す
+  std::string::size_type pos = _buffer.find("\r\n");
+  if (pos == std::string::npos) {
+    // バッファが大きすぎる場合はエラー（無限に待たない）
+    if (_buffer.size() > MAX_LINE_SIZE) {
+      setError(ERR_HEADER_TOO_LARGE);
+      return false;
+    }
+    return false;  // まだ行が揃っていない
+  }
+
+  // 空行なら完了 (trailerなしまたはtrailer終端)
+  if (pos == 0) {
+    _buffer.erase(0, 2);
+    _parseState = REQ_COMPLETE;
+    return true;
+  }
+
+  // trailer行数制限チェック (DoS対策)
+  ++_trailerCount;
+  if (_trailerCount > MAX_TRAILER_LINES) {
+    setError(ERR_HEADER_TOO_LARGE);
+    return false;
+  }
+
+  // trailerの形式検証: RFC 7230 に従い field-name: field-value 形式
+  std::string line = _buffer.substr(0, pos);
+  if (line.find(':') == std::string::npos) {
+    // 不正なtrailer形式
+    setError(ERR_HEADER_TOO_LARGE);
+    return false;
+  }
+
+  // trailer header をスキップ（無視）
+  // RFC 7230: trailerは無視しても良い
+  _buffer.erase(0, pos + 2);
+  return true;  // 次の行をチェックするためprogress=true
 }
 
 // =============================================================================
