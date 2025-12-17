@@ -52,9 +52,14 @@ const LocationConfig* ServerConfig::getLocation(const std::string& path) const {
       // 完全一致
       is_match = true;
     } else if (path.length() > loc_path.length() &&
-               path.compare(0, loc_path.length(), loc_path) == 0 &&
-               path[loc_path.length()] == '/') {
-      is_match = true;
+               path.compare(0, loc_path.length(), loc_path) == 0) {
+      // プレフィックスマッチ:
+      // - loc_pathが'/'で終わる場合: プレフィックス一致のみでOK
+      // - loc_pathが'/'で終わらない場合: pathの次の文字が'/'である必要がある
+      if (loc_path[loc_path.length() - 1] == '/' ||
+          path[loc_path.length()] == '/') {
+        is_match = true;
+      }
     }
 
     if (is_match && loc_path.length() > best_match_len) {

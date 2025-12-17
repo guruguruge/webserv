@@ -217,6 +217,35 @@ void test_get_location_root_fallback() {
   PASS();
 }
 
+void test_get_location_trailing_slash() {
+  TEST("getLocation with trailing slash in loc_path");
+
+  ServerConfig server;
+
+  LocationConfig loc1;
+  loc1.path = "/";
+  loc1.root = "www";
+
+  LocationConfig loc2;
+  loc2.path = "/images/";  // 末尾スラッシュ付き
+  loc2.root = "www/images";
+
+  server.locations.push_back(loc1);
+  server.locations.push_back(loc2);
+
+  // /images/test.jpg は /images/ にマッチすべき
+  const LocationConfig* result = server.getLocation("/images/test.jpg");
+  ASSERT_NOT_NULL(result);
+  ASSERT_EQ("/images/", result->path);
+
+  // /images/ 自体も完全一致でマッチ
+  result = server.getLocation("/images/");
+  ASSERT_NOT_NULL(result);
+  ASSERT_EQ("/images/", result->path);
+
+  PASS();
+}
+
 void test_get_location_no_root_returns_null() {
   TEST("getLocation no root returns NULL");
 
@@ -408,6 +437,7 @@ int main() {
   test_get_location_no_false_prefix();
   test_get_location_longest_match();
   test_get_location_root_fallback();
+  test_get_location_trailing_slash();
   test_get_location_no_root_returns_null();
 
   std::cout << std::endl << "[MainConfig]" << std::endl;
