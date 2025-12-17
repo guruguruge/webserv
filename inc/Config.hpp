@@ -13,16 +13,18 @@
  * ルーティング設定を管理する。
  */
 struct LocationConfig {
-  std::string path;         ///< マッチするURLパス (ex: "/api")
-  std::string root;         ///< ドキュメントルート (ex: "/var/www/html")
-  std::string alias;        ///< パス置換用エイリアス (ex: "/var/www/static")
-  std::string index;        ///< デフォルトインデックスファイル (ex: "index.html")
-  std::vector<HttpMethod> allow_methods;  ///< 許可するHTTPメソッド (GET, POST, DELETE)
+  std::string path;   ///< マッチするURLパス (ex: "/api")
+  std::string root;   ///< ドキュメントルート (ex: "/var/www/html")
+  std::string alias;  ///< パス置換用エイリアス (ex: "/var/www/static")
+  std::string index;  ///< デフォルトインデックスファイル (ex: "index.html")
+  std::vector<HttpMethod>
+      allow_methods;          ///< 許可するHTTPメソッド (GET, POST, DELETE)
   std::string cgi_extension;  ///< CGI拡張子 (ex: ".py")
   std::string cgi_path;       ///< CGI実行パス (ex: "/usr/bin/python3")
   std::string upload_path;    ///< アップロード先ディレクトリ (ex: "/uploads")
   bool autoindex;             ///< ディレクトリリスティングの有効/無効
-  std::pair<int, std::string> return_redirect;  ///< リダイレクト設定 (status, URL)
+  std::pair<int, std::string>
+      return_redirect;  ///< リダイレクト設定 (status, URL)
 
   /**
    * @brief デフォルトコンストラクタ
@@ -43,11 +45,14 @@ struct LocationConfig {
  * ごとの設定を管理する。
  */
 struct ServerConfig {
-  int listen_port;          ///< リッスンポート (デフォルト: 80)
-  std::string host;         ///< バインドアドレス (ex: "0.0.0.0", "127.0.0.1")
-  std::vector<std::string> server_names;  ///< サーバー名リスト (ex: "example.com")
-  std::map<int, std::string> error_pages;  ///< エラーページマップ (404 -> "/404.html")
-  size_t client_max_body_size;  ///< クライアントボディ最大サイズ (デフォルト: 1MB)
+  int listen_port;   ///< リッスンポート (デフォルト: 80)
+  std::string host;  ///< バインドアドレス (ex: "0.0.0.0", "127.0.0.1")
+  std::vector<std::string>
+      server_names;  ///< サーバー名リスト (ex: "example.com")
+  std::map<int, std::string>
+      error_pages;  ///< エラーページマップ (404 -> "/404.html")
+  size_t
+      client_max_body_size;  ///< クライアントボディ最大サイズ (デフォルト: 1MB)
   std::vector<LocationConfig> locations;  ///< Location設定リスト
 
   /**
