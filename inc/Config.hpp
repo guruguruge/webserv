@@ -45,13 +45,15 @@ struct LocationConfig {
  * ごとの設定を管理する。
  */
 struct ServerConfig {
-  int listen_port;                         ///< リッスンポート (デフォルト: 80)
-  std::string root;                        ///< デフォルトドキュメントルート
-  std::string host;                        ///< バインドアドレス (ex: "0.0.0.0")
-  std::vector<std::string> server_names;   ///< サーバー名リスト (ex: "example.com")
-  std::map<int, std::string> error_pages;  ///< エラーページマップ (404 -> "/404.html")
-  size_t client_max_body_size;             ///< クライアントボディ最大サイズ
-  std::vector<LocationConfig> locations;   ///< Location設定リスト
+  int listen_port;   ///< リッスンポート (デフォルト: 80)
+  std::string root;  ///< デフォルトドキュメントルート
+  std::string host;  ///< バインドアドレス (ex: "0.0.0.0")
+  std::vector<std::string>
+      server_names;  ///< サーバー名リスト (ex: "example.com")
+  std::map<int, std::string>
+      error_pages;              ///< エラーページマップ (404 -> "/404.html")
+  size_t client_max_body_size;  ///< クライアントボディ最大サイズ
+  std::vector<LocationConfig> locations;  ///< Location設定リスト
 
   /**
    * @brief デフォルトコンストラクタ
