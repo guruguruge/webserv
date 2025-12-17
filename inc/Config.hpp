@@ -14,9 +14,12 @@ struct LocationConfig {
   std::string index;                      // ex: "index.html"
   std::vector<HttpMethod> allow_methods;  // GET, POST...
   std::string cgi_extension;              // ex: ".php"
+  std::string cgi_path;                   // ex: "/usr/bin/python3"
   std::string upload_path;                // ex: "/uploads"
   bool autoindex;
   std::pair<int, std::string> return_redirect;  // 301 / "http://..."
+
+  LocationConfig();
 };
 
 // Serverブロック (ポート、サーバー名ごとの設定)
@@ -27,6 +30,8 @@ struct ServerConfig {
   std::map<int, std::string> error_pages;  // 404 -> "/404.html"
   size_t client_max_body_size;
   std::vector<LocationConfig> locations;
+
+  ServerConfig();
 
   // パスに最も長くマッチするLocationを返す
   const LocationConfig* getLocation(const std::string& path) const;
