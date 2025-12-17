@@ -86,8 +86,6 @@ struct ServerConfig {
  */
 class MainConfig {
  public:
-  std::vector<ServerConfig> servers;  ///< Server設定リスト
-
   /**
    * @brief デフォルトコンストラクタ
    */
@@ -120,7 +118,10 @@ class MainConfig {
    */
   const ServerConfig* getServer(const std::string& host, int port) const;
 
+  std::vector<ServerConfig> servers;  ///< Server設定リスト
+
  private:
+  // コピー禁止: MainConfigは設定の単一インスタンスとして使用する想定
   MainConfig(const MainConfig&);
   MainConfig& operator=(const MainConfig&);
 };
