@@ -1,9 +1,11 @@
 NAME = webserv
 CXX = c++
 FLAGS = -Wall -Werror -Wextra -std=c++98 -pedantic
+INCLUDES = -I inc
 RM = rm -f
 SRCDIR = src
 SRC = \
+	$(SRCDIR)/Config.cpp \
 	$(SRCDIR)/HttpRequest.cpp \
 	$(SRCDIR)/HttpResponse.cpp \
 	main.cpp
@@ -18,7 +20,7 @@ $(NAME): $(OBJ)
 
 $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(FLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
 		$(RM) -r $(OBJDIR)
