@@ -424,9 +424,9 @@ int main() {
   std::cout << "========================================" << std::endl;
   std::cout << "Results: " << g_pass_count << "/" << g_test_count << " passed";
   if (g_pass_count == g_test_count) {
-    std::cout << " ✓" << std::endl;
+    std::cout << " [PASS]" << std::endl;
   } else {
-    std::cout << " ✗" << std::endl;
+    std::cout << " [FAIL]" << std::endl;
   }
   std::cout << "========================================" << std::endl;
   std::cout << std::endl;

@@ -119,6 +119,10 @@ class MainConfig {
    * @return マッチしたServerConfigへのポインタ、serversが空の場合はNULL
    */
   const ServerConfig* getServer(const std::string& host, int port) const;
+
+ private:
+  MainConfig(const MainConfig&);
+  MainConfig& operator=(const MainConfig&);
 };
 
 #endif
