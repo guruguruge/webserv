@@ -78,6 +78,8 @@ const LocationConfig* RequestHandler::_findLocationConfig(
   for (std::vector<LocationConfig>::const_iterator it =
            serverConfig.locations.begin();
        it != serverConfig.locations.end(); ++it) {
+    if (it->path.empty())
+      continue;
     if (uri.compare(0, it->path.length(), it->path) == 0) {
       if (uri.length() > it->path.length() &&
           it->path[it->path.length() - 1] != '/' &&
@@ -135,7 +137,7 @@ std::string RequestHandler::_resolvePath(const std::string& uri,
   } else {
     std::string root =
         location->root.empty() ? serverConfig.root : location->root;
-    path = location->root + uri;
+    path = root + uri;
   }
   return path;
 }
