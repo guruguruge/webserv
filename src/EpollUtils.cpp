@@ -1,0 +1,55 @@
+#include "../inc/EpollUtils.hpp"
+#include <unistd.h>
+#include <cstdio>
+#include <cstring>
+#include <new>
+#include <stdexcept>
+
+EpollUtils::EpollUtils() {
+  this->_epoll_fd = epoll_create(1);
+  if (this->_epoll_fd < 0) {
+    perror("epoll_create");
+    throw std::runtime_error("Failed to create epoll instance");
+  }
+}
+
+EpollUtils::~EpollUtils() {
+  close(this->_epoll_fd);
+}
+
+bool EpollUtils::add(int fd, EpollContext* ctx, uint32_t events) {
+  struct epoll_event ev;
+  std::memset(&ev, 0, sizeof(ev));
+
+  ev.events = events;
+  ev.data.ptr = ctx;
+
+  if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
+    perror("epoll_ctl: add");
+    return false;
+  }
+  return true;
+}
+
+bool EpollUtils::mod(int fd, EpollContext* ctx, uint32_t events) {
+  // 別PR
+  (void)fd;
+  (void)ctx;
+  (void)events;  // 未使用変数の警告消し
+  return false;
+}
+
+bool EpollUtils::del(int fd) {
+  // 別PR
+  (void)fd;
+  return false;
+}
+
+int EpollUtils::wait(struct epoll_event* events, int max_events,
+                     int timeout_ms) {
+  // 別PR
+  (void)events;
+  (void)max_events;
+  (void)timeout_ms;
+  return -1;
+}
