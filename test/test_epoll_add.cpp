@@ -1,4 +1,6 @@
-#include <unistd.h>  // pipe, close
+#include <sys/epoll.h>  // EPOLLIN
+#include <unistd.h>     // pipe, close
+#include <cstdio>       // perror
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
@@ -35,9 +37,9 @@ int main() {
       return 1;
     }
 
-    // Context作成 (リスナーではないダミーとして作成)
-    // Client*なし、FDとPortだけ渡すコンストラクタを使用
-    EpollContext* ctx = new EpollContext(pipe_fds[0], 8080);
+    // Context作成 (ファクトリメソッドを使用)
+    // Listener用コンテキストとしてダミーポート8080で作成
+    EpollContext* ctx = EpollContext::createListener(8080);
 
     // ---------------------------------------------------------
     // TEST 1: 正常な追加
@@ -62,13 +64,28 @@ int main() {
     // ---------------------------------------------------------
     {
       int invalid_fd = -1;
+      EpollContext* ctx2 = EpollContext::createListener(9090);
       std::cout << "--- Expecting 'Bad file descriptor' error below ---"
                 << std::endl;
-      bool ret = epoll.add(invalid_fd, ctx, EPOLLIN);
+      bool ret = epoll.add(invalid_fd, ctx2, EPOLLIN);
       printResult("Add invalid FD (should fail)", ret == false);
+      delete ctx2;
+    }
+
+    // ---------------------------------------------------------
+    // TEST 4: 別のFDを追加 (CLIENT タイプ)
+    // ---------------------------------------------------------
+    {
+      EpollContext* ctx3 = EpollContext::createClient(NULL);  // Client*なし
+      bool ret = epoll.add(pipe_fds[1], ctx3, EPOLLOUT);
+      printResult("Add second FD (write end)", ret == true);
+      // 後始末
+      epoll.del(pipe_fds[1]);
+      delete ctx3;
     }
 
     // 後始末
+    epoll.del(pipe_fds[0]);
     delete ctx;
     close(pipe_fds[0]);
     close(pipe_fds[1]);
