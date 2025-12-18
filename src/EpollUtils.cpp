@@ -47,9 +47,5 @@ bool EpollUtils::del(int fd) {
 
 int EpollUtils::wait(struct epoll_event* events, int max_events,
                      int timeout_ms) {
-  // 別PR
-  (void)events;
-  (void)max_events;
-  (void)timeout_ms;
-  return -1;
+  return epoll_wait(_epoll_fd, events, max_events, timeout_ms);
 }
