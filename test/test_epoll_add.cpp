@@ -1,7 +1,7 @@
 #include <sys/epoll.h>  // EPOLLIN
 #include <unistd.h>     // pipe, close
-#include <cstdio>       // perror
 #include <cassert>
+#include <cstdio>  // perror
 #include <cstdlib>
 #include <iostream>
 #include "../inc/EpollContext.hpp"
