@@ -40,9 +40,11 @@ bool EpollUtils::mod(int fd, EpollContext* ctx, uint32_t events) {
 }
 
 bool EpollUtils::del(int fd) {
-  // 別PR
-  (void)fd;
-  return false;
+  if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, fd, NULL) < 0) {
+    perror("epoll_ctl: del");
+    return false;
+  }
+  return true;
 }
 
 int EpollUtils::wait(struct epoll_event* events, int max_events,
