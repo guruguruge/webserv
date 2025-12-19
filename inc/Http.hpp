@@ -57,8 +57,8 @@ class HttpRequest {
   };
   ChunkState _chunkState;
   size_t _currentChunkSize;  // 現在のチャンクサイズ
-  size_t _chunkBytesRead;    // 現在のチャンクで読み取ったバイト数
-  size_t _trailerCount;      // trailer行数カウンタ（DoS対策）
+  size_t _chunkBytesRead;  // 現在のチャンクで読み取ったバイト数
+  size_t _trailerCount;    // trailer行数カウンタ（DoS対策）
 
   // 紐付いた設定（パース完了後にセットされる）
   const ServerConfig* _config;
@@ -74,7 +74,7 @@ class HttpRequest {
   bool parseChunkData();          // チャンクデータを読み取り
   bool parseChunkDataCRLF();      // データ後の \r\n を消費
   bool parseChunkFinalCRLF();     // 終端の \r\n を消費
-  void setError(ErrorCode err);   // エラー状態をセットしREQ_ERRORに遷移
+  void setError(ErrorCode err);  // エラー状態をセットしREQ_ERRORに遷移
   size_t getMaxBodySize() const;  // client_max_body_size を取得
 
  public:
