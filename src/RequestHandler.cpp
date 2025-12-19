@@ -262,7 +262,7 @@ bool RequestHandler::_isDirectory(const std::string& path) {
   struct stat buffer;
   if (stat(path.c_str(), &buffer) != 0) {
     if (errno != ENOENT) {
-      std::cerr << "[Warn] _isFileExist: stat failed for " << path << "("
+      std::cerr << "[Warn] _isDirectory: stat failed for " << path << "("
                 << strerror(errno) << ")" << std::endl;
     }
     return false;
