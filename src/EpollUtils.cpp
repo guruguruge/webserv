@@ -32,11 +32,17 @@ bool EpollUtils::add(int fd, EpollContext* ctx, uint32_t events) {
 }
 
 bool EpollUtils::mod(int fd, EpollContext* ctx, uint32_t events) {
-  // 別PR
-  (void)fd;
-  (void)ctx;
-  (void)events;  // 未使用変数の警告消し
-  return false;
+  struct epoll_event ev;
+  std::memset(&ev, 0, sizeof(ev));
+
+  ev.events = events;
+  ev.data.ptr = ctx;
+
+  if (epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
+    perror("epoll_ctl: mod");
+    return false;
+  }
+  return true;
 }
 
 bool EpollUtils::del(int fd) {
