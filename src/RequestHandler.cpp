@@ -194,7 +194,8 @@ void RequestHandler::_handleGet(Client* client, const std::string& realPath,
                                 const LocationConfig* location) {
   std::string pathToFile = realPath;
   if (!_isFileExist(pathToFile)) {
-    _handleError(client, 404); // Not found
+    _handleError(client, 404);  // Not found
+    return;
   }
   if (_isDirectory(pathToFile)) {
     std::string indexFile = "index.html";
@@ -210,23 +211,23 @@ void RequestHandler::_handleGet(Client* client, const std::string& realPath,
       pathToFile = candidatePath;
     } else {
       // 本来はここでAutoIndexの判定を行うが、今回は未実装のため403 Forbidden
-      _handleError(client, 403); // Forbidden
-      return ;
+      _handleError(client, 403);  // Forbidden
+      return;
     }
   }
   if (_isDirectory(pathToFile)) {
-    _handleError(client, 403); // Forbidden
-    return ;
+    _handleError(client, 403);  // Forbidden
+    return;
   }
   if (!_checkPermission(pathToFile, "r")) {
-    _handleError(client, 403); // Forbidden
-    return ;
+    _handleError(client, 403);  // Forbidden
+    return;
   }
-  if (client->res.setBodyFile(pathToFile)){
+  if (client->res.setBodyFile(pathToFile)) {
     client->res.setStatusCode(200);
     client->setState(WRITING_RESPONSE);
   } else {
-    _handleError(client, 500); // Internal Server Error
+    _handleError(client, 500);  // Internal Server Error
   }
 }
 
@@ -245,16 +246,16 @@ void RequestHandler::_handleDelete(Client* client, const std::string& realPath,
 }
 
 void RequestHandler::_handleError(Client* client, int statusCode) {
-  HttpResponse res;
-  res.setStatusCode(statusCode);
-  client->res = res;
+  // TODO: configに応じてエラーページをカスタムする
+  client->res.makeErrorResponse(statusCode, NULL);
+  client->setState(WRITING_RESPONSE);
 }
 
 // Determines if the specified path is a directory.
 //
 // Args:
 //   path: The path to check.
-// 
+//
 // Returns:
 //   true if it is a directory, false otherwise.
 bool RequestHandler::_isDirectory(const std::string& path) {
