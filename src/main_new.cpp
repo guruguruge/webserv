@@ -29,7 +29,7 @@
 // 定数
 
 static const int MAX_EVENTS = 64;
-static const int TIMEOUT_MS = 1000;       // epoll_wait タイムアウト
+static const int TIMEOUT_MS = 1000;  // epoll_wait タイムアウト
 static const time_t CLIENT_TIMEOUT = 60;  // クライアントタイムアウト (秒)
 static const int RECV_BUFFER_SIZE = 4096;
 
