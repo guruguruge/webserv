@@ -48,7 +48,7 @@ class Client {
   // RequestHandler はこれらを呼ぶだけで OK
 
   void readyToWrite();  // WRITING_RESPONSE へ遷移 + EPOLLOUT 設定
-  void readyToRead();  // リクエスト待ちへ遷移 + EPOLLIN 設定 (Keep-Alive)
+  void readyToRead();   // リクエスト待ちへ遷移 + EPOLLIN 設定 (Keep-Alive)
   void startCgi(const std::string& scriptPath);  // CGI 実行開始
   void finishCgi();                              // CGI 完了処理
   void markClose();                              // 接続終了マーク
