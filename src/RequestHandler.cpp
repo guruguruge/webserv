@@ -183,17 +183,51 @@ std::string RequestHandler::_resolvePath(const std::string& uri,
   return path;
 }
 
-// 以下、スケルトン実装
+// Handle GET requests.
+// Checks for file existence, permissions, and searchs for index files if the path is a directory.
+//
+// Args:
+//   client: Pointer to the Client object.
+//   realPath: The resolved file system path.
+//   location: The matched LocationConfig.
 void RequestHandler::_handleGet(Client* client, const std::string& realPath,
                                 const LocationConfig* location) {
-  (void)location;
-  (void)realPath;
-
-  // 仮レスポンス
-  HttpResponse res;
-  res.setStatusCode(200);
-  res.setBody("Hello from GET! Path resolved to: " + realPath);
-  client->res = res;
+  std::string pathToFile = realPath;
+  if (!_isFileExist(pathToFile)) {
+    _handleError(client, 404); // Not found
+  }
+  if (_isDirectory(pathToFile)) {
+    std::string indexFile = "index.html";
+    if (location && !location->index.empty()) {
+      indexFile = location->index;
+    }
+    std::string candidatePath = pathToFile;
+    if (!candidatePath.empty() && *(candidatePath.end() - 1) != '/') {
+      candidatePath += "/";
+    }
+    candidatePath += indexFile;
+    if (_isFileExist(candidatePath)) {
+      pathToFile = candidatePath;
+    } else {
+      // 本来はここでAutoIndexの判定を行うが、今回は未実装のため403 Forbidden
+      _handleError(client, 403); // Forbidden
+      return ;
+    }
+  }
+  if (_isDirectory(pathToFile)) {
+    _handleError(client, 403); // Forbidden
+    return ;
+  }
+  if (!_checkPermission(pathToFile, "r")) {
+    _handleError(client, 403); // Forbidden
+    return ;
+  }
+  if (client->res.setBodyFile(pathToFile)){
+    client->res.setStatusCode(200);
+    client->setState(WRITING_RESPONSE);
+  } else {
+    _handleError(client, 500); // Internal Server Error
+  }
 }
 
 void RequestHandler::_handlePost(Client* client, const std::string& realPath,
@@ -214,4 +248,67 @@ void RequestHandler::_handleError(Client* client, int statusCode) {
   HttpResponse res;
   res.setStatusCode(statusCode);
   client->res = res;
+}
+
+// Determines if the specified path is a directory.
+//
+// Args:
+//   path: The path to check.
+// 
+// Returns:
+//   true if it is a directory, false otherwise.
+bool RequestHandler::_isDirectory(const std::string& path) {
+  struct stat buffer;
+  if (stat(path.c_str(), &buffer) != 0) {
+    if (errno != ENOENT) {
+      std::cerr << "[Warn] _isFileExist: stat failed for " << path << "("
+                << strerror(errno) << ")" << std::endl;
+    }
+    return false;
+  }
+  return S_ISDIR(buffer.st_mode);
+}
+
+// Check if a file or a directory exists at the specified path.
+// Args:
+//   path: the path to check.
+//
+// Returns:
+//   true if it exists, false otherwise.
+bool RequestHandler::_isFileExist(const std::string& path) {
+  if (access(path.c_str(), F_OK) == 0)
+    return true;
+  if (errno != ENOENT) {
+    std::cerr << "[Warn] _isFileExist: access() failed for " << path << "("
+              << strerror(errno) << ")" << std::endl;
+  }
+  return false;
+}
+
+// Checks if there is access permission for the specified path with the specified mode.
+//
+// Args:
+//   path: The path to check.
+//   mode: The permission mode to check ("r" for read, "w" for write,  and "x" for execute.)
+//
+// Returns:
+//   true if permission is granted, false otherwise.
+bool RequestHandler::_checkPermission(const std::string& path,
+                                      const std::string& mode) {
+  int modeFlag = R_OK;
+  if (mode == "w")
+    modeFlag = W_OK;
+  else if (mode == "x")
+    modeFlag = X_OK;
+
+  if (access(path.c_str(), modeFlag) == 0) {
+    return true;
+  }
+
+  if (errno != EACCES) {
+    std::cerr << "[Warn] _checkPermission: access() failed for " << path << "("
+              << strerror(errno) << ")" << std::endl;
+  }
+
+  return false;
 }
