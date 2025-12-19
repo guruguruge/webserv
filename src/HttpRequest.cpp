@@ -58,7 +58,7 @@ HttpRequest::HttpRequest()
       _chunkBytesRead(0),
       _trailerCount(0),
       _config(NULL),
-      _location(NULL){}
+      _location(NULL) {}
 
 // =============================================================================
 // Destructor
