@@ -43,6 +43,13 @@ static std::string normalizeUri(const std::string& uri) {
   return normalized;
 }
 
+// Main entry point for handling client requests.
+// Analyzes the request, identifies the appropriate configuration, resolve paths,
+// and delegates processing to specific method handlers.
+// Supports internal redirection for error handling.
+//
+// Args:
+//   client: Pointer for the Client object holding request and response data.
 void RequestHandler::handle(Client* client) {
   if (!client)
     return;
@@ -102,90 +109,14 @@ void RequestHandler::handle(Client* client) {
 }
 
 const ServerConfig* RequestHandler::_findServerConfig(const Client* client) {
-  int port = client->getListenPort();
-  std::string hostHeader = client->req.getHeader("Host");
-  std::string hostName = hostHeader;
-
-  size_t colonPos = hostName.find(':');
-  if (colonPos != std::string::npos) {
-    hostName = hostName.substr(0, colonPos);
-  }
-  const ServerConfig* defaultServer = NULL;
-
-  for (std::vector<ServerConfig>::const_iterator it = _config.servers.begin();
-       it != _config.servers.end(); ++it) {
-    if (it->listen_port != port) {
-      continue;
-    }
-    if (defaultServer == NULL) {
-      defaultServer = &(*it);
-    }
-    for (std::vector<std::string>::const_iterator nameIt =
-             it->server_names.begin();
-         nameIt != it->server_names.end(); ++nameIt) {
-      if (*nameIt == hostName) {
-        return &(*it);
-      }
-    }
-  }
-  return defaultServer;
+  return _config.getServer(client->req.getHeader("Host"),
+                           client->getListenPort());
 }
 
-// 正規表現エンジンを作るのがだるすぎるので、一旦は簡易実装
 const LocationConfig* RequestHandler::_findLocationConfig(
     const HttpRequest& req, const ServerConfig& serverConfig) {
-
-  const LocationConfig* bestPrefixMatch = NULL;
-  size_t maxPrefixLength = 0;
   std::string uri = normalizeUri(req.getPath());
-  for (std::vector<LocationConfig>::const_iterator it =
-           serverConfig.locations.begin();
-       it != serverConfig.locations.end(); ++it) {
-    if (it->path.empty())
-      continue;
-    if (uri.compare(0, it->path.length(), it->path) == 0) {
-      if (uri.length() > it->path.length() &&
-          it->path[it->path.length() - 1] != '/' &&
-          uri[it->path.length()] != '/')
-        continue;
-      if (it->path.length() > maxPrefixLength) {
-        maxPrefixLength = it->path.length();
-        bestPrefixMatch = &(*it);
-      }
-    }
-  }
-  return bestPrefixMatch;
-  //   for (std::vector<LocationConfig>::const_iterator it =
-  //            serverConfig.locations.begin();
-  //        it != serverConfig.locations.end(); ++it) {
-  //     if (it->modifier == "=") {
-  //       if (uri == it->path) {
-  //         return &(*it);
-  //       }
-  //       continue;
-  //     }
-  //     if (it->modifier == "^~" || it->modifier.empty()) {
-  //       if (uri.compare(0, it->path.length(), it->path) == 0) {
-  //         if (it->path.length() > maxPrefixLength) {
-  //           maxPrefixLength = it->path.length();
-  //           bestPrefixMatch = &(*it);
-  //         }
-  //       }
-  //     }
-  //     if (bestPrefixMatch && bestPrefixMatch->modifier == "^~") {
-  //       return bestPrefixMatch;
-  //     }
-  //     for (std::vector<LocationConfig>::const_iterator it =
-  //              serverConfig.locations.begin();
-  //          it != serverConfig.locations.end(); ++it) {
-  //       if (it->modifier == "~" || it->modifier == "~*") {
-  //         if (_isRegexMatch(uri, it->path, (it->modifier == "~*"))) {
-  //           return &(*it);
-  //         }
-  //       }
-  //     }
-  //     return bestPrefixMatch;
-  //   }
+  return serverConfig.getLocation(uri);
 }
 
 std::string RequestHandler::_resolvePath(const std::string& uri,
@@ -266,8 +197,7 @@ int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
   return 501;
 }
 
-
-// Handle HTTP redirection specified in the Location configulation. 
+// Handle HTTP redirection specified in the Location configulation.
 // Sets the status code and Location header.
 //
 // Args:
@@ -285,9 +215,13 @@ void RequestHandler::_handleRedirection(Client* client,
 
 // Handles errors by checking for custom error pages or generating a default response.
 // Supports internal redirection if a custom error page is configured.
-// 
+//
 // Args:
-//   client: Pointer to the 
+//   client: Pointer to the Client object.
+//   statusCode: The HTTP status code indicating the error.
+//
+// Returns:
+//   true if an internal redirection occured, false otherwise.
 bool RequestHandler::_handleError(Client* client, int statusCode) {
   const ServerConfig* serverConfig = client->req.getConfig();
   if (!serverConfig) {
