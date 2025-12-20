@@ -46,9 +46,7 @@ static bool isDigitsOnly(const std::string& str) {
 // Default Constructor
 // =============================================================================
 HttpRequest::HttpRequest()
-    : _config(NULL),
-      _location(NULL),
-      _parseState(REQ_REQUEST_LINE),
+    : _parseState(REQ_REQUEST_LINE),
       _error(ERR_NONE),
       _headerCount(0),
       _totalHeaderSize(0),
@@ -58,7 +56,9 @@ HttpRequest::HttpRequest()
       _chunkState(CHUNK_SIZE_LINE),
       _currentChunkSize(0),
       _chunkBytesRead(0),
-      _trailerCount(0) {}
+      _trailerCount(0),
+      _config(NULL),
+      _location(NULL) {}
 
 // =============================================================================
 // Destructor
