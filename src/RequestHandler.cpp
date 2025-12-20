@@ -47,34 +47,58 @@ void RequestHandler::handle(Client* client) {
   if (!client)
     return;
 
-  const HttpRequest& req = client->req;
+  int redirectCount = 0;
+  const int maxRedirects = 10;
+  int finalStatusCode = 0;
 
-  const ServerConfig* matchedServer = _findServerConfig(client);
-  if (!matchedServer) {
-    _handleError(client, 500);
+  while (redirectCount++ < maxRedirects) {
+    const HttpRequest& req = client->req;
+
+    const ServerConfig* matchedServer = _findServerConfig(client);
+    if (!matchedServer) {
+      _handleError(client, 500);
+      return;
+    }
+
+    const LocationConfig* matchedLocation =
+        _findLocationConfig(client->req, *matchedServer);
+
+    if (matchedLocation && matchedLocation->return_redirect.first != 0) {
+      _handleRedirection(client, matchedLocation);
+      return;
+    }
+
+    std::string realPath =
+        _resolvePath(client->req.getPath(), *matchedServer, matchedLocation);
+
+    int procResult = 0;
+    switch (req.getMethod()) {
+      case GET:
+        procResult = _handleGet(client, realPath, matchedLocation);
+        break;
+      case POST:
+        procResult = _handlePost(client, realPath, matchedLocation);
+        break;
+      case DELETE:
+        procResult = _handleDelete(client, realPath, matchedLocation);
+        break;
+      default:
+        procResult = 405;
+        break;
+    }
+    if (procResult == 0) {
+      if (finalStatusCode != 0) {
+        client->res.setStatusCode(finalStatusCode);
+      }
+      return;
+    }
+    if (_handleError(client, procResult)) {
+      continue;
+    }
     return;
   }
-
-  const LocationConfig* matchedLocation =
-      _findLocationConfig(client->req, *matchedServer);
-
-  std::string realPath =
-      _resolvePath(client->req.getPath(), *matchedServer, matchedLocation);
-
-  switch (req.getMethod()) {
-    case GET:
-      _handleGet(client, realPath, matchedLocation);
-      break;
-    case POST:
-      _handlePost(client, realPath, matchedLocation);
-      break;
-    case DELETE:
-      _handleDelete(client, realPath, matchedLocation);
-      break;
-    default:
-      _handleError(client, 405);
-      break;
-  }
+  client->res.makeErrorResponse(500, NULL);  // internal server error
+  client->setState(WRITING_RESPONSE);
 }
 
 const ServerConfig* RequestHandler::_findServerConfig(const Client* client) {
@@ -184,18 +208,17 @@ std::string RequestHandler::_resolvePath(const std::string& uri,
 }
 
 // Handle GET requests.
-// Checks for file existence, permissions, and searchs for index files if the path is a directory.
+// Checks for file existence, permissions, and searches for index files if the path is a directory.
 //
 // Args:
 //   client: Pointer to the Client object.
 //   realPath: The resolved file system path.
 //   location: The matched LocationConfig.
-void RequestHandler::_handleGet(Client* client, const std::string& realPath,
-                                const LocationConfig* location) {
+int RequestHandler::_handleGet(Client* client, const std::string& realPath,
+                               const LocationConfig* location) {
   std::string pathToFile = realPath;
   if (!_isFileExist(pathToFile)) {
-    _handleError(client, 404);  // Not found
-    return;
+    return 404;  // Not found
   }
   if (_isDirectory(pathToFile)) {
     std::string indexFile = "index.html";
@@ -211,44 +234,75 @@ void RequestHandler::_handleGet(Client* client, const std::string& realPath,
       pathToFile = candidatePath;
     } else {
       // 本来はここでAutoIndexの判定を行うが、今回は未実装のため403 Forbidden
-      _handleError(client, 403);  // Forbidden
-      return;
+      return 403;  // Forbidden
     }
   }
   if (_isDirectory(pathToFile)) {
-    _handleError(client, 403);  // Forbidden
-    return;
+    return 403;  // Forbidden
   }
   if (!_checkPermission(pathToFile, "r")) {
-    _handleError(client, 403);  // Forbidden
-    return;
+    return 403;  // Forbidden
   }
   if (client->res.setBodyFile(pathToFile)) {
     client->res.setStatusCode(200);
-    client->setState(WRITING_RESPONSE);
+    client->readyToWrite();
+    return 0;
   } else {
-    _handleError(client, 500);  // Internal Server Error
+    return 500;  // Internal Server Error
   }
 }
 
-void RequestHandler::_handlePost(Client* client, const std::string& realPath,
-                                 const LocationConfig* location) {
+int RequestHandler::_handlePost(Client* client, const std::string& realPath,
+                                const LocationConfig* location) {
   (void)realPath;
   (void)location;
-  _handleError(client, 501);
+  return 501;
 }
 
-void RequestHandler::_handleDelete(Client* client, const std::string& realPath,
-                                   const LocationConfig* location) {
+int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
+                                  const LocationConfig* location) {
   (void)realPath;
   (void)location;
-  _handleError(client, 501);
+  return 501;
 }
 
-void RequestHandler::_handleError(Client* client, int statusCode) {
-  // TODO: configに応じてエラーページをカスタムする
+
+// Handle HTTP redirection specified in the Location configulation. 
+// Sets the status code and Location header.
+//
+// Args:
+//   client: Pointer to the Client object.
+//   location: The matched LocationConfig containing redirection details.
+void RequestHandler::_handleRedirection(Client* client,
+                                        const LocationConfig* location) {
+  int code = location->return_redirect.first;
+  const std::string& uri = location->return_redirect.second;
+
+  client->res.makeErrorResponse(code, NULL);
+  client->res.setHeader("Location", uri);
+  client->readyToWrite();
+}
+
+// Handles errors by checking for custom error pages or generating a default response.
+// Supports internal redirection if a custom error page is configured.
+// 
+// Args:
+//   client: Pointer to the 
+bool RequestHandler::_handleError(Client* client, int statusCode) {
+  const ServerConfig* serverConfig = client->req.getConfig();
+  if (!serverConfig) {
+    serverConfig = _findServerConfig(client);
+  }
+  if (serverConfig && serverConfig->error_pages.count(statusCode) > 0) {
+    std::string errorUri = serverConfig->error_pages.at(statusCode);
+    if (!errorUri.empty() && *errorUri.begin() == '/') {
+      client->req.setPath(errorUri);
+      return true;
+    }
+  }
   client->res.makeErrorResponse(statusCode, NULL);
-  client->setState(WRITING_RESPONSE);
+  client->readyToWrite();
+  return false;
 }
 
 // Determines if the specified path is a directory.

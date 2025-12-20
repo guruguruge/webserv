@@ -49,12 +49,12 @@ class RequestHandler {
   // --- Method Handlers ---
   // 内部で client->readyToWrite() を呼んで状態遷移する
 
-  void _handleGet(Client* client, const std::string& realPath,
+  int _handleGet(Client* client, const std::string& realPath,
+                 const LocationConfig* location);
+  int _handlePost(Client* client, const std::string& realPath,
                   const LocationConfig* location);
-  void _handlePost(Client* client, const std::string& realPath,
-                   const LocationConfig* location);
-  void _handleDelete(Client* client, const std::string& realPath,
-                     const LocationConfig* location);
+  int _handleDelete(Client* client, const std::string& realPath,
+                    const LocationConfig* location);
 
   // --- Specific Features ---
 
@@ -69,7 +69,7 @@ class RequestHandler {
   void _handleRedirection(Client* client, const LocationConfig* location);
 
   // エラーレスポンスの生成 (内部で client->readyToWrite() を呼ぶ)
-  void _handleError(Client* client, int statusCode);
+  bool _handleError(Client* client, int statusCode);
 
   // --- Utilities ---
   bool _isCgiRequest(const std::string& path, const LocationConfig* location);
