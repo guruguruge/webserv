@@ -99,6 +99,9 @@ void RequestHandler::handle(Client* client) {
       }
       return;
     }
+    if (finalStatusCode == 0) {
+      finalStatusCode = procResult;
+    }
     if (_handleError(client, procResult)) {
       continue;
     }
@@ -185,6 +188,7 @@ int RequestHandler::_handleGet(Client* client, const std::string& realPath,
 
 int RequestHandler::_handlePost(Client* client, const std::string& realPath,
                                 const LocationConfig* location) {
+  (void)client;
   (void)realPath;
   (void)location;
   return 501;
@@ -192,6 +196,7 @@ int RequestHandler::_handlePost(Client* client, const std::string& realPath,
 
 int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
                                   const LocationConfig* location) {
+  (void)client;
   (void)realPath;
   (void)location;
   return 501;
