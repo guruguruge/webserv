@@ -626,3 +626,7 @@ void HttpRequest::setConfig(const ServerConfig* config) {
 const ServerConfig* HttpRequest::getConfig() const {
   return _config;
 }
+
+void HttpRequest::setPath(const std::string& path) {
+  _path = path;
+}
