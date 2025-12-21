@@ -247,7 +247,7 @@ void RequestHandler::_handleRedirection(Client* client,
 //   statusCode: The HTTP status code indicating the error.
 //
 // Returns:
-//   true if an internal redirection occured, false otherwise.
+//   true if an internal redirection occurred, false otherwise.
 bool RequestHandler::_handleError(Client* client, int statusCode) {
   const ServerConfig* serverConfig = client->req.getConfig();
   if (!serverConfig) {
