@@ -204,6 +204,8 @@ int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
 
 // Handle HTTP redirection specified in the Location configulation.
 // Sets the status code and Location header.
+// Only allow valid redirection codes: 301, 302, 303, 307, 308.
+// If invalid, fallback to 302 (Found).
 //
 // Args:
 //   client: Pointer to the Client object.
@@ -212,7 +214,17 @@ void RequestHandler::_handleRedirection(Client* client,
                                         const LocationConfig* location) {
   int code = location->return_redirect.first;
   const std::string& uri = location->return_redirect.second;
-
+  switch (code) {
+    case 301:
+    case 302:
+    case 303:
+    case 307:
+    case 308:
+      break;
+    default:
+      code = 302;
+      break;
+  }
   client->res.makeErrorResponse(code, NULL);
   client->res.setHeader("Location", uri);
   client->readyToWrite();
