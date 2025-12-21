@@ -117,7 +117,7 @@ void RequestHandler::handle(Client* client) {
     return;
   }
   client->res.makeErrorResponse(500, NULL);  // internal server error
-  client->setState(WRITING_RESPONSE);
+  client->readyToWrite();
 }
 
 const ServerConfig* RequestHandler::_findServerConfig(const Client* client) {
