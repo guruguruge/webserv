@@ -57,9 +57,18 @@ void RequestHandler::handle(Client* client) {
   int redirectCount = 0;
   const int maxRedirects = 10;
   int finalStatusCode = 0;
+  std::string prevUri;
 
   while (redirectCount++ < maxRedirects) {
     const HttpRequest& req = client->req;
+    std::string currentUri = req.getPath();
+
+    if (!prevUri.empty() && currentUri == prevUri) {
+      client->res.makeErrorResponse(508, NULL);
+      client->readyToWrite();
+      return;
+    }
+    prevUri = currentUri;
 
     const ServerConfig* matchedServer = _findServerConfig(client);
     if (!matchedServer) {
