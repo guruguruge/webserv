@@ -332,6 +332,16 @@ int writeFile(const std::string& path, const std::vector<char>& data) {
   return 0;
 }
 
+int removeFile(const std::string& path) {
+  if (unlink(path.c_str()) == 0)
+    return (0);
+  if (errno == EACCES || errno == EPERM)
+    return 403;  // Forbidden
+  if (errno == ENOENT)
+    return 404;  // Not Found
+  return 500;    // Internal Error
+}
+
 }  // namespace
 
 RequestHandler::RequestHandler(const MainConfig& config) : _config(config) {}
@@ -381,6 +391,17 @@ void RequestHandler::handle(Client* client) {
 
     std::string realPath =
         _resolvePath(client->req.getPath(), *matchedServer, matchedLocation);
+
+    if (matchedLocation) {
+      const std::vector<HttpMethod>& allowed = matchedLocation->allow_methods;
+      if (std::find(allowed.begin(), allowed.end(), req.getMethod()) ==
+          allowed.end()) {
+        if (_handleError(client, 405)) {
+          continue;
+        }  // Method not allowed
+        return;
+      }
+    }
 
     int procResult = 0;
     switch (req.getMethod()) {
@@ -512,7 +533,7 @@ int RequestHandler::_handlePost(Client* client, const std::string& realPath,
   if (writeResult != 0)
     return writeResult;
 
-  client->res.setStatusCode(201); // Created
+  client->res.setStatusCode(201);  // Created
   client->res.setHeader("Location", client->req.getPath());
   client->res.setBody("Created");
   client->readyToWrite();
@@ -520,11 +541,34 @@ int RequestHandler::_handlePost(Client* client, const std::string& realPath,
   return 0;
 }
 
+// Handles DELETE requests by removing the specified resource.
+//
+// Args:
+//   client: Pointer to the Client object.
+//   realPath: The resolved file system path.
+//   location: The matched LocationConfig.
+//
+// Returns:
+//   0 on success, or an HTTP status code on failure.
 int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
                                   const LocationConfig* location) {
-  (void)client;
-  (void)realPath;
   (void)location;
+  if (!_isFileExist(realPath)) {
+    return 404;  // Not found
+  }
+  if (_isDirectory(realPath)) {
+    return 403;  // Forbidden
+  }
+  if (!_checkPermission(realPath, "w")) {
+    return 403;  // Forbidden
+  }
+
+  int removeResult = removeFile(realPath);
+  if (removeResult != 0) {
+    return removeResult;
+  }
+  client->res.setStatusCode(204);  // No Content
+  client->readyToWrite();
   return 501;
 }
 
