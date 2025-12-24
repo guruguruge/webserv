@@ -569,7 +569,7 @@ int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
   }
   client->res.setStatusCode(204);  // No Content
   client->readyToWrite();
-  return 501;
+  return 0;
 }
 
 void RequestHandler::_generateAutoIndex(Client* client,
