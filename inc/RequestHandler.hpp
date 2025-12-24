@@ -1,10 +1,13 @@
 #ifndef REQUESTHANDLER_HPP
 #define REQUESTHANDLER_HPP
 
+#include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <algorithm>
 #include <cstring>
+#include <iomanip>
 #include <string>
 #include "Client.hpp"
 #include "Config.hpp"

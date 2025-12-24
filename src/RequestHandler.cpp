@@ -1,8 +1,16 @@
 #include "RequestHandler.hpp"
 
-RequestHandler::RequestHandler(const MainConfig& config) : _config(config) {}
+namespace {
 
-RequestHandler::~RequestHandler() {}
+template <typename T>
+std::string toString(const T& value) {
+  std::ostringstream oss;
+  oss << value;
+  if (oss.fail()) {
+    return "";
+  }
+  return oss.str();
+}
 
 static std::string normalizeUri(const std::string& uri) {
   std::vector<std::string> parts;
@@ -42,6 +50,177 @@ static std::string normalizeUri(const std::string& uri) {
   }
   return normalized;
 }
+
+std::string formatTime(time_t timer) {
+  long seconds = static_cast<long>(timer);
+  const long secPerMin = 60;
+  const long secPerHour = 3600;
+  const long secPerDay = 86400;
+
+  long days = seconds / secPerDay;
+  long remSeconds = seconds % secPerDay;
+
+  if (remSeconds < 0) {
+    remSeconds += secPerDay;
+    days--;
+  }
+
+  long hour = remSeconds / secPerHour;
+  remSeconds %= secPerHour;
+  long min = remSeconds / secPerMin;
+
+  int year = 1970;
+  if (days >= 0) {
+    while (true) {
+      bool isLeap = (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+      int daysInYear = isLeap ? 366 : 365;
+      if (days < daysInYear)
+        break;
+      days -= daysInYear;
+      year++;
+    }
+  } else {
+    while (days < 0) {
+      bool isLeap = (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+      int daysInYear = isLeap ? 366 : 365;
+      days += daysInYear;
+      year--;
+    }
+  }
+
+  int month = 0;
+  bool isLeap = (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+  int daysInMonth[12] = {
+      31, (isLeap ? 29 : 28), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  static const char* monthNames[12] = {"Jan", "Feb", "Mar", "Apr",
+                                       "May", "Jun", "Jul", "Aug",
+                                       "Sep", "Oct", "Nov", "Dec"};
+  while (days >= daysInMonth[month]) {
+    days -= daysInMonth[month];
+    month++;
+  }
+
+  int day = days += 1;
+
+  std::ostringstream oss;
+  oss << std::setw(2) << std::setfill('0') << day << "-" << monthNames[month]
+      << "-" << year << " " << std::setw(2) << std::setfill('0') << hour << ":"
+      << std::setw(2) << std::setfill('0') << min;
+
+  if (oss.fail()) {
+    return "";
+  }
+  return oss.str();
+}
+
+struct FileEntry {
+  std::string name;
+  bool isDir;
+  time_t mtime;
+  off_t size;
+
+  static bool compare(const FileEntry& a, const FileEntry& b) {
+    if (a.isDir != b.isDir) {
+      return (a.isDir);
+    }
+    return a.name < b.name;
+  }
+};
+
+bool collectFileEntries(const std::string& dirPath,
+                        std::vector<FileEntry>& entries) {
+  DIR* dir = opendir(dirPath.c_str());
+  if (!dir) {
+    return false;
+  }
+  struct dirent* entry;
+  while ((entry = readdir(dir))) {
+    std::string name = entry->d_name;
+    if (name == ".")
+      continue;
+
+    std::string fullPath = dirPath;
+    if (!fullPath.empty() && *(fullPath.end() - 1) != '/') {
+      fullPath += "/";
+    }
+    fullPath += name;
+
+    struct stat fileStat;
+    if (stat(fullPath.c_str(), &fileStat) == 0) {
+      FileEntry e;
+      e.name = name;
+      e.isDir = S_ISDIR(fileStat.st_mode);
+      e.mtime = fileStat.st_mtime;
+      e.size = fileStat.st_size;
+      entries.push_back(e);
+    }
+  }
+  closedir(dir);
+  std::sort(entries.begin(), entries.end(), FileEntry::compare);
+  return true;
+}
+
+std::string formatSize(const FileEntry& e) {
+  if (e.isDir) {
+    return "-";
+  }
+  return toString(e.size);
+}
+
+bool generateAutoIndexHtml(const std::vector<FileEntry>& entries,
+                           const std::string& requestUri,
+                           std::string& outHtml) {
+  std::ostringstream htmlOss;
+
+  htmlOss << "<html>\r\n"
+          << "<head><title>Index of " << requestUri << "</title></head>\r\n"
+          << "<body>\r\n"
+          << "<h1>Index of " << requestUri << "</h1>\r\n"
+          << "<hr><pre>\r\n";
+  htmlOss << std::left << std::setw(50) << "Name" << std::setw(25)
+          << "Last modified" << std::right << std::setw(15) << "Size" << "\r\n";
+  htmlOss << "<hr>\r\n";
+
+  for (std::vector<FileEntry>::const_iterator it = entries.begin();
+       it != entries.end(); ++it) {
+    std::string name = it->name;
+    std::string displayName = name + (it->isDir ? "/" : "");
+
+    // 表示用の省略名作成
+    std::string linkName = displayName;
+    if (linkName.length() > 45) {
+      linkName = linkName.substr(0, 42) + "..>";
+    }
+
+    std::string timeStr = formatTime(it->mtime);
+    if (timeStr.empty()) {
+      return false;
+    }
+
+    std::string sizeStr = formatSize(*it);
+    if (sizeStr.empty()) {
+      return false;
+    }
+
+    // HTML行生成
+    htmlOss << "<a href=\"" << displayName << "\">" << std::left
+            << std::setw(50) << linkName << "</a> " << std::setw(25) << timeStr
+            << std::right << std::setw(15) << sizeStr << "\r\n";
+  }
+
+  htmlOss << "</pre><hr></body>\r\n</html>";
+
+  if (htmlOss.fail()) {
+    return false;
+  }
+  outHtml = htmlOss.str();
+  return true;
+}
+}  // namespace
+
+RequestHandler::RequestHandler(const MainConfig& config) : _config(config) {}
+
+RequestHandler::~RequestHandler() {}
 
 // Main entry point for handling client requests.
 // Analyzes the request, identifies the appropriate configuration, resolve paths,
@@ -175,8 +354,10 @@ int RequestHandler::_handleGet(Client* client, const std::string& realPath,
     candidatePath += indexFile;
     if (_isFileExist(candidatePath)) {
       pathToFile = candidatePath;
+    } else if (location && location->autoindex) {
+      _generateAutoIndex(client, pathToFile);
+      return 0;
     } else {
-      // 本来はここでAutoIndexの判定を行うが、今回は未実装のため403 Forbidden
       return 403;  // Forbidden
     }
   }
@@ -209,6 +390,26 @@ int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
   (void)realPath;
   (void)location;
   return 501;
+}
+
+void RequestHandler::_generateAutoIndex(Client* client,
+                                        const std::string& dirPath) {
+  std::vector<FileEntry> entries;
+  if (!collectFileEntries(dirPath, entries)) {
+    _handleError(client, 403);  // Forbidden
+    return;
+  }
+
+  std::string htmlContent;
+  if (!generateAutoIndexHtml(entries, client->req.getPath(), htmlContent)) {
+    _handleError(client, 500);  // Internal server error
+    return;
+  }
+
+  client->res.setStatusCode(200);
+  client->res.setHeader("Content-Type", "text/html");
+  client->res.setBody(htmlContent);
+  client->readyToWrite();
 }
 
 // Handle HTTP redirection specified in the Location configulation.
