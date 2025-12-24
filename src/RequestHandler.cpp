@@ -271,6 +271,67 @@ bool generateAutoIndexHtml(const std::vector<FileEntry>& entries,
   outHtml = htmlOss.str();
   return true;
 }
+
+// Determines the target file path for upload.
+// Uses upload_path if available, otherwise uses the resolved real path.
+//
+// Args:
+//   req: The HTTP request object.
+//   realPath: The resolved file system path.
+//   location: The matched LocationConfig.
+//
+// Returns:
+//   The determined file system path for saving the file.
+std::string resolveUploadPath(const HttpRequest& req,
+                              const std::string& realPath,
+                              const LocationConfig* location) {
+  if (location && !location->upload_path.empty()) {
+    std::string targetPath = location->upload_path;
+    if (!targetPath.empty() && *targetPath.rbegin() != '/') {
+      targetPath += "/";
+    }
+
+    std::string uri = req.getPath();
+    std::string filename;
+    size_t lastSlash = uri.rfind('/');
+    if (lastSlash != std::string::npos && lastSlash + 1 < uri.size()) {
+      filename = uri.substr(lastSlash + 1);
+    } else {
+      filename = "default_upload.dat";
+    }
+    return targetPath + filename;
+  }
+  return realPath;
+}
+
+// Writes data to a file, overwriting if it exists.
+//
+// Args:
+//   path: The file path to write to.
+//   data: The content to write.
+//
+// Returns:
+//   0 on success, or an HTTP status code (403, 404, 500) on failure.
+int writeFile(const std::string& path, const std::vector<char>& data) {
+  std::ofstream ofs(path.c_str(), std::ios::binary | std::ios::trunc);
+  if (!ofs.is_open()) {
+    if (errno == EACCES)
+      return 403;  // Forbidden
+    if (errno == ENOENT)
+      return 404;  // Parent directory missing
+    return 500;    // Internal Error
+  }
+  if (!data.empty()) {
+    ofs.write(&data[0], data.size());
+  }
+  if (ofs.bad()) {
+    ofs.close();
+    return 500;
+  }
+  ofs.close();
+  return 0;
+}
+
 }  // namespace
 
 RequestHandler::RequestHandler(const MainConfig& config) : _config(config) {}
@@ -431,12 +492,32 @@ int RequestHandler::_handleGet(Client* client, const std::string& realPath,
   }
 }
 
+// Handles POST requests.
+// Writes the request body to a file. Supports upload_path if configured.
+//
+// Args:
+//   client: Pointer to the Client object.
+//   realPath: The resolved file system path.
+//   location: The matched LocationConfig.
+//
+// Returns:
+//   HTTP status code (0 for success, or error code).
 int RequestHandler::_handlePost(Client* client, const std::string& realPath,
                                 const LocationConfig* location) {
-  (void)client;
-  (void)realPath;
-  (void)location;
-  return 501;
+  std::string targetPath = resolveUploadPath(client->req, realPath, location);
+  if (_isDirectory(targetPath)) {
+    return 403;  // Forbidden;
+  }
+  int writeResult = writeFile(targetPath, client->req.getBody());
+  if (writeResult != 0)
+    return writeResult;
+
+  client->res.setStatusCode(201); // Created
+  client->res.setHeader("Location", client->req.getPath());
+  client->res.setBody("Created");
+  client->readyToWrite();
+
+  return 0;
 }
 
 int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
