@@ -296,8 +296,6 @@ std::string resolveUploadPath(const HttpRequest& req,
     size_t lastSlash = uri.rfind('/');
     if (lastSlash != std::string::npos && lastSlash + 1 < uri.size()) {
       filename = uri.substr(lastSlash + 1);
-    } else {
-      filename = "default_upload.dat";
     }
     return targetPath + filename;
   }
