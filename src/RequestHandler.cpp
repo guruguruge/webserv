@@ -60,9 +60,15 @@ static std::string normalizeUri(const std::string& uri) {
   if (parts.empty()) {
     return "/";
   }
+
   std::string normalized;
-  for (size_t i = 0; i < parts.size(); ++i) {
-    normalized += "/" + parts[i];
+  for (std::vector<std::string>::const_iterator it = parts.begin();
+       it != parts.end(); ++it) {
+    normalized += "/" + (*it);
+  }
+
+  if (uri.size() > 1 && *(uri.end() - 1) == '/') {
+    normalized += "/";
   }
   return normalized;
 }
