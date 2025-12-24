@@ -2,6 +2,14 @@
 
 namespace {
 
+// Converts a value to a string using stringstream.
+// This is a C++98 compatible alternative to std::to_string.
+//
+// Args:
+//   value: The value to convert.
+//
+// Returns:
+//   The string representation of the value.
 template <typename T>
 std::string toString(const T& value) {
   std::ostringstream oss;
@@ -12,6 +20,14 @@ std::string toString(const T& value) {
   return oss.str();
 }
 
+// Normalizes the URI to prevent path traversal attacks.
+// Resolves segments like "/../" to ensure the path does not traverse above the root directory.
+//
+// Args:
+//   uri: The raw URI string to normalize.
+//
+// Returns:
+//   The normalized URI string.
 static std::string normalizeUri(const std::string& uri) {
   std::vector<std::string> parts;
   std::string::size_type start = 0;
@@ -51,6 +67,14 @@ static std::string normalizeUri(const std::string& uri) {
   return normalized;
 }
 
+// Formats a time_t value into a readable string (e.g., "01-Jan-2023 12:00").
+// Implemented manually to comply with restrictions on using C standard library time functions.
+//
+// Args:
+//   timer: The time_t value (seconds since epoch).
+//
+// Returns:
+//   A formatted date-time string.
 std::string formatTime(time_t timer) {
   long seconds = static_cast<long>(timer);
   const long secPerMin = 60;
@@ -127,6 +151,14 @@ struct FileEntry {
   }
 };
 
+// Collects file entries from a directory and sorts them.
+//
+// Args:
+//   dirPath: The path to the directory to read.
+//   entries: A vector to store the collected FileEntry objects.
+//
+// Returns:
+//   true if successful, false if the directory could not be opened.
 bool collectFileEntries(const std::string& dirPath,
                         std::vector<FileEntry>& entries) {
   DIR* dir = opendir(dirPath.c_str());
@@ -160,6 +192,14 @@ bool collectFileEntries(const std::string& dirPath,
   return true;
 }
 
+// Formats the file size for display.
+// Returns "-" for directories.
+//
+// Args:
+//   e: The FileEntry object.
+//
+// Returns:
+//   The formatted size string.
 std::string formatSize(const FileEntry& e) {
   if (e.isDir) {
     return "-";
@@ -167,6 +207,15 @@ std::string formatSize(const FileEntry& e) {
   return toString(e.size);
 }
 
+// Generates the HTML content for the autoindex page.
+//
+// Args:
+//   entries: A list of file entries to display.
+//   requestUri: The URI of the request (used for title and header).
+//   outHtml: Output parameter to store the generated HTML.
+//
+// Returns:
+//   true on success, false on failure (e.g., stream error).
 bool generateAutoIndexHtml(const std::vector<FileEntry>& entries,
                            const std::string& requestUri,
                            std::string& outHtml) {
