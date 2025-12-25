@@ -1,4 +1,6 @@
 #include "Config.hpp"
+#include <iostream>
+#include "ConfigParser.hpp"
 
 // ============================================================================
 // LocationConfig
@@ -91,9 +93,14 @@ MainConfig::~MainConfig() {}
  * @return 成功時true、失敗時false
  */
 bool MainConfig::load(const std::string& file_path) {
-  // TODO: ConfigParser実装後に完成させる
-  (void)file_path;
-  return false;
+  ConfigParser parser(file_path);
+  try {
+    parser.parse(*this);
+    return true;
+  } catch (const std::runtime_error& e) {
+    std::cerr << e.what() << std::endl;
+    return false;
+  }
 }
 
 /**
