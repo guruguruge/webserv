@@ -6,6 +6,7 @@ RM = rm -f
 SRCDIR = src
 SRC = \
 	$(SRCDIR)/Config.cpp \
+	$(SRCDIR)/ConfigParser.cpp \
 	$(SRCDIR)/HttpRequest.cpp \
 	$(SRCDIR)/HttpResponse.cpp \
 	main.cpp
