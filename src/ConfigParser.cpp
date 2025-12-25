@@ -4,6 +4,29 @@
 #include <stdexcept>
 
 // ============================================================================
+// 定数定義
+// ============================================================================
+
+namespace {
+// ポート番号の範囲
+const int PORT_MIN = 0;
+const int PORT_MAX = 65535;
+
+// HTTPステータスコードの範囲
+const int STATUS_CODE_MIN = 100;
+const int STATUS_CODE_MAX = 599;
+
+// リダイレクトステータスコードの範囲
+const int REDIRECT_CODE_MIN = 300;
+const int REDIRECT_CODE_MAX = 399;
+
+// サイズ単位（バイト）
+const size_t KILOBYTE = 1024;
+const size_t MEGABYTE = 1024 * 1024;
+const size_t GIGABYTE = 1024 * 1024 * 1024;
+}  // namespace
+
+// ============================================================================
 // コンストラクタ・デストラクタ
 // ============================================================================
 
@@ -167,6 +190,12 @@ void ConfigParser::parseServerBlock(MainConfig& config) {
     }
   }
 
+  // listenディレクティブは必須
+  if (!has_listen) {
+    throw std::runtime_error(
+        makeError("'listen' directive is required in server block"));
+  }
+
   expectToken("}");
   config.servers.push_back(server);
 }
@@ -246,7 +275,7 @@ void ConfigParser::parseListenDirective(ServerConfig& server) {
   // ポート番号を数値に変換
   std::istringstream iss(port_str);
   int port;
-  if (!(iss >> port) || port < 0 || port > 65535) {
+  if (!(iss >> port) || port < PORT_MIN || port > PORT_MAX) {
     throw std::runtime_error(makeError("invalid port number: " + port_str));
   }
   server.listen_port = port;
@@ -279,9 +308,15 @@ void ConfigParser::parseErrorPageDirective(ServerConfig& server) {
 
   // エラーコードを集める（数字の間）
   while (hasMoreTokens() && peekToken() != ";" && isNumber(peekToken())) {
-    std::istringstream iss(nextToken());
+    std::string code_str = nextToken();
+    std::istringstream iss(code_str);
     int code;
     iss >> code;
+    // ステータスコードは100-599の範囲
+    if (code < STATUS_CODE_MIN || code > STATUS_CODE_MAX) {
+      throw std::runtime_error(
+          makeError("invalid status code (must be 100-599): " + code_str));
+    }
     codes.push_back(code);
   }
 
@@ -399,7 +434,7 @@ void ConfigParser::parseReturnDirective(LocationConfig& location) {
         makeError("invalid return status code: " + code_str));
   }
   // リダイレクトステータスは300-399の範囲
-  if (code < 300 || code > 399) {
+  if (code < REDIRECT_CODE_MIN || code > REDIRECT_CODE_MAX) {
     throw std::runtime_error(
         makeError("return status code must be 300-399, got: " + code_str));
   }
@@ -424,13 +459,13 @@ size_t ConfigParser::parseSize(const std::string& size_str) const {
   char last_char = size_str[size_str.length() - 1];
 
   if (last_char == 'K' || last_char == 'k') {
-    multiplier = 1024;
+    multiplier = KILOBYTE;
     num_str = size_str.substr(0, size_str.length() - 1);
   } else if (last_char == 'M' || last_char == 'm') {
-    multiplier = 1024 * 1024;
+    multiplier = MEGABYTE;
     num_str = size_str.substr(0, size_str.length() - 1);
   } else if (last_char == 'G' || last_char == 'g') {
-    multiplier = 1024 * 1024 * 1024;
+    multiplier = GIGABYTE;
     num_str = size_str.substr(0, size_str.length() - 1);
   }
 

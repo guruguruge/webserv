@@ -557,6 +557,57 @@ void test_allowed_methods_dedup() {
   PASS();
 }
 
+// Test: listen directive is required
+void test_listen_required() {
+  TEST("listen directive is required in server block");
+
+  const char* test_conf = "/tmp/test_listen_required.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    server_name localhost;\n";  // listenなし
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on missing listen directive");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("'listen' directive is required") !=
+                std::string::npos);
+  }
+
+  PASS();
+}
+
+// Test: error_page with invalid status code range
+void test_error_page_invalid_code_range() {
+  TEST("error_page with invalid status code (outside 100-599)");
+
+  const char* test_conf = "/tmp/test_error_page_range.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    error_page 999 /error.html;\n";  // 範囲外
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on invalid status code 999");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("invalid status code") != std::string::npos ||
+                msg.find("100-599") != std::string::npos);
+  }
+
+  PASS();
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -588,6 +639,8 @@ int main() {
   test_ipv6_not_supported();
   test_duplicate_return_error();
   test_allowed_methods_dedup();
+  test_listen_required();
+  test_error_page_invalid_code_range();
 
   std::cout << std::endl;
   std::cout << "========================================" << std::endl;
