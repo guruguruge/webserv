@@ -51,8 +51,8 @@ class ConfigParser {
  private:
   std::string file_path_;            ///< 設定ファイルパス
   std::vector<std::string> tokens_;  ///< トークンリスト
+  std::vector<int> token_lines_;     ///< 各トークンの行番号
   size_t current_index_;             ///< 現在のトークン位置
-  size_t current_line_;              ///< 現在の行番号（エラー報告用）
 
   // ============================================================================
   // トークナイザ

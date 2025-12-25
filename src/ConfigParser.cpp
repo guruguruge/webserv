@@ -8,7 +8,7 @@
 // ============================================================================
 
 ConfigParser::ConfigParser(const std::string& file_path)
-    : file_path_(file_path), current_index_(0), current_line_(1) {}
+    : file_path_(file_path), current_index_(0) {}
 
 ConfigParser::~ConfigParser() {}
 
@@ -37,46 +37,57 @@ void ConfigParser::parse(MainConfig& config) {
 // ============================================================================
 
 void ConfigParser::tokenize() {
+  // 状態を初期化（複数回呼び出しに対応）
+  tokens_.clear();
+  token_lines_.clear();
+  current_index_ = 0;
+
   std::ifstream file(file_path_.c_str());
   if (!file.is_open()) {
     throw std::runtime_error("failed to open config file: " + file_path_);
   }
 
-  std::string content;
   std::string line;
+  int line_number = 0;
+
   while (std::getline(file, line)) {
+    ++line_number;
+
     // コメント除去
     size_t comment_pos = line.find('#');
     if (comment_pos != std::string::npos) {
       line = line.substr(0, comment_pos);
     }
-    content += line + "\n";
-  }
-  file.close();
 
-  std::string token;
-  for (size_t i = 0; i < content.length(); ++i) {
-    char c = content[i];
+    // 行ごとにトークナイズ
+    std::string token;
+    for (size_t i = 0; i < line.length(); ++i) {
+      char c = line[i];
 
-    if (isDelimiter(c)) {
-      // 現在のトークンを保存
-      if (!token.empty()) {
-        tokens_.push_back(token);
-        token.clear();
+      if (isDelimiter(c)) {
+        // 現在のトークンを保存
+        if (!token.empty()) {
+          tokens_.push_back(token);
+          token_lines_.push_back(line_number);
+          token.clear();
+        }
+        // 区切り文字自体もトークンとして保存（空白以外）
+        if (c == '{' || c == '}' || c == ';') {
+          tokens_.push_back(std::string(1, c));
+          token_lines_.push_back(line_number);
+        }
+      } else {
+        token += c;
       }
-      // 区切り文字自体もトークンとして保存（空白以外）
-      if (c == '{' || c == '}' || c == ';') {
-        tokens_.push_back(std::string(1, c));
-      }
-    } else {
-      token += c;
+    }
+
+    // 行末のトークン
+    if (!token.empty()) {
+      tokens_.push_back(token);
+      token_lines_.push_back(line_number);
     }
   }
-
-  // 最後のトークン
-  if (!token.empty()) {
-    tokens_.push_back(token);
-  }
+  file.close();
 }
 
 bool ConfigParser::isDelimiter(char c) const {
@@ -127,12 +138,17 @@ void ConfigParser::parseServerBlock(MainConfig& config) {
   expectToken("{");
 
   ServerConfig server;
+  bool has_listen = false;
 
   while (hasMoreTokens() && peekToken() != "}") {
     std::string directive = nextToken();
 
     if (directive == "listen") {
+      if (has_listen) {
+        throw std::runtime_error(makeError("duplicate 'listen' directive"));
+      }
       parseListenDirective(server);
+      has_listen = true;
     } else if (directive == "server_name") {
       parseServerNameDirective(server);
     } else if (directive == "root") {
@@ -156,6 +172,14 @@ void ConfigParser::parseServerBlock(MainConfig& config) {
 void ConfigParser::parseLocationBlock(ServerConfig& server) {
   // location パスを取得
   std::string path = nextToken();
+
+  // 重複locationチェック
+  for (size_t i = 0; i < server.locations.size(); ++i) {
+    if (server.locations[i].path == path) {
+      throw std::runtime_error(makeError("duplicate location path: " + path));
+    }
+  }
+
   expectToken("{");
 
   LocationConfig location;
@@ -220,7 +244,14 @@ void ConfigParser::parseListenDirective(ServerConfig& server) {
 void ConfigParser::parseServerNameDirective(ServerConfig& server) {
   // セミコロンまで複数のサーバー名を読む
   while (hasMoreTokens() && peekToken() != ";") {
-    server.server_names.push_back(nextToken());
+    std::string name = nextToken();
+    // 小文字に正規化（DNS名は大文字小文字を区別しない）
+    for (size_t i = 0; i < name.length(); ++i) {
+      if (name[i] >= 'A' && name[i] <= 'Z') {
+        name[i] = name[i] + ('a' - 'A');
+      }
+    }
+    server.server_names.push_back(name);
   }
   skipSemicolon();
 }
@@ -332,6 +363,11 @@ void ConfigParser::parseReturnDirective(LocationConfig& location) {
     throw std::runtime_error(
         makeError("invalid return status code: " + code_str));
   }
+  // リダイレクトステータスは300-399の範囲
+  if (code < 300 || code > 399) {
+    throw std::runtime_error(
+        makeError("return status code must be 300-399, got: " + code_str));
+  }
 
   std::string url = nextToken();
   skipSemicolon();
@@ -386,6 +422,12 @@ bool ConfigParser::isNumber(const std::string& str) const {
 
 std::string ConfigParser::makeError(const std::string& message) const {
   std::ostringstream oss;
-  oss << file_path_ << ": " << message;
+  oss << file_path_;
+  if (current_index_ > 0 && current_index_ <= token_lines_.size()) {
+    oss << ":" << token_lines_[current_index_ - 1];
+  } else if (current_index_ < token_lines_.size()) {
+    oss << ":" << token_lines_[current_index_];
+  }
+  oss << ": " << message;
   return oss.str();
 }

@@ -287,6 +287,145 @@ void test_parse_host_port() {
   PASS();
 }
 
+void test_server_name_normalization() {
+  TEST("server_name is normalized to lowercase");
+
+  const char* test_conf = "/tmp/test_servername_norm.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    server_name EXAMPLE.COM WWW.Example.ORG;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  parser.parse(config);
+
+  ASSERT_EQ(2u, config.servers[0].server_names.size());
+  ASSERT_EQ("example.com", config.servers[0].server_names[0]);
+  ASSERT_EQ("www.example.org", config.servers[0].server_names[1]);
+
+  PASS();
+}
+
+void test_duplicate_listen_error() {
+  TEST("duplicate listen directive throws error");
+
+  const char* test_conf = "/tmp/test_dup_listen.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    listen 8081;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+
+  bool caught = false;
+  try {
+    parser.parse(config);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    // エラーメッセージに "duplicate" が含まれていることを確認
+    std::string msg = e.what();
+    ASSERT_TRUE(msg.find("duplicate") != std::string::npos);
+  }
+  ASSERT_TRUE(caught);
+
+  PASS();
+}
+
+void test_duplicate_location_error() {
+  TEST("duplicate location path throws error");
+
+  const char* test_conf = "/tmp/test_dup_location.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    location /api {\n";
+  file << "        root www;\n";
+  file << "    }\n";
+  file << "    location /api {\n";
+  file << "        root www2;\n";
+  file << "    }\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+
+  bool caught = false;
+  try {
+    parser.parse(config);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    std::string msg = e.what();
+    ASSERT_TRUE(msg.find("duplicate") != std::string::npos);
+  }
+  ASSERT_TRUE(caught);
+
+  PASS();
+}
+
+void test_error_has_line_number() {
+  TEST("error message includes line number");
+
+  const char* test_conf = "/tmp/test_lineno.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";                // line 1
+  file << "    listen 8080;\n";        // line 2
+  file << "    unknown_directive;\n";  // line 3 - error
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+
+  bool caught = false;
+  try {
+    parser.parse(config);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    std::string msg = e.what();
+    // エラーメッセージに行番号 "3" が含まれていることを確認
+    ASSERT_TRUE(msg.find(":3:") != std::string::npos);
+  }
+  ASSERT_TRUE(caught);
+
+  PASS();
+}
+
+void test_return_invalid_status() {
+  TEST("return with invalid status code throws error");
+
+  const char* test_conf = "/tmp/test_return_invalid.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    location /old {\n";
+  file << "        return 200 http://example.com;\n";  // 200は不正
+  file << "    }\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+
+  bool caught = false;
+  try {
+    parser.parse(config);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    std::string msg = e.what();
+    ASSERT_TRUE(msg.find("300-399") != std::string::npos);
+  }
+  ASSERT_TRUE(caught);
+
+  PASS();
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -308,6 +447,11 @@ int main() {
   test_parse_comment();
   test_parse_multiple_servers();
   test_parse_host_port();
+  test_server_name_normalization();
+  test_duplicate_listen_error();
+  test_duplicate_location_error();
+  test_error_has_line_number();
+  test_return_invalid_status();
 
   std::cout << std::endl;
   std::cout << "========================================" << std::endl;
