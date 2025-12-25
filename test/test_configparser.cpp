@@ -426,6 +426,137 @@ void test_return_invalid_status() {
   PASS();
 }
 
+void test_server_name_trailing_dot() {
+  TEST("server_name trailing dot is removed");
+
+  const char* test_conf = "/tmp/test_servername_dot.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    server_name example.com.;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  parser.parse(config);
+
+  ASSERT_EQ(1u, config.servers[0].server_names.size());
+  ASSERT_EQ("example.com", config.servers[0].server_names[0]);
+
+  PASS();
+}
+
+void test_error_page_requires_code() {
+  TEST("error_page without code throws error");
+
+  const char* test_conf = "/tmp/test_errorpage_nocode.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    error_page /error.html;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+
+  bool caught = false;
+  try {
+    parser.parse(config);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    std::string msg = e.what();
+    ASSERT_TRUE(msg.find("status code") != std::string::npos);
+  }
+  ASSERT_TRUE(caught);
+
+  PASS();
+}
+
+void test_ipv6_not_supported() {
+  TEST("IPv6 listen throws error");
+
+  const char* test_conf = "/tmp/test_ipv6.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen [::1]:8080;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+
+  bool caught = false;
+  try {
+    parser.parse(config);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    std::string msg = e.what();
+    ASSERT_TRUE(msg.find("IPv6") != std::string::npos);
+  }
+  ASSERT_TRUE(caught);
+
+  PASS();
+}
+
+void test_duplicate_return_error() {
+  TEST("duplicate return directive throws error");
+
+  const char* test_conf = "/tmp/test_dup_return.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    location /old {\n";
+  file << "        return 301 http://a.com;\n";
+  file << "        return 302 http://b.com;\n";
+  file << "    }\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+
+  bool caught = false;
+  try {
+    parser.parse(config);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    std::string msg = e.what();
+    ASSERT_TRUE(msg.find("duplicate") != std::string::npos);
+  }
+  ASSERT_TRUE(caught);
+
+  PASS();
+}
+
+void test_allowed_methods_dedup() {
+  TEST("duplicate methods in allowed_methods are deduplicated");
+
+  const char* test_conf = "/tmp/test_methods_dedup.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    location / {\n";
+  file << "        root www;\n";
+  file << "        allowed_methods GET GET POST GET;\n";
+  file << "    }\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  parser.parse(config);
+
+  const LocationConfig& loc = config.servers[0].locations[0];
+  // GET, POST の2つだけになるはず
+  ASSERT_EQ(2u, loc.allow_methods.size());
+  ASSERT_EQ(GET, loc.allow_methods[0]);
+  ASSERT_EQ(POST, loc.allow_methods[1]);
+
+  PASS();
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -452,6 +583,11 @@ int main() {
   test_duplicate_location_error();
   test_error_has_line_number();
   test_return_invalid_status();
+  test_server_name_trailing_dot();
+  test_error_page_requires_code();
+  test_ipv6_not_supported();
+  test_duplicate_return_error();
+  test_allowed_methods_dedup();
 
   std::cout << std::endl;
   std::cout << "========================================" << std::endl;

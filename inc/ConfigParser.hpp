@@ -53,6 +53,7 @@ class ConfigParser {
   std::vector<std::string> tokens_;  ///< トークンリスト
   std::vector<int> token_lines_;     ///< 各トークンの行番号
   size_t current_index_;             ///< 現在のトークン位置
+  int last_line_;                    ///< 最後に消費したトークンの行番号
 
   // ============================================================================
   // トークナイザ

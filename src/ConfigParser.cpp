@@ -8,7 +8,7 @@
 // ============================================================================
 
 ConfigParser::ConfigParser(const std::string& file_path)
-    : file_path_(file_path), current_index_(0) {}
+    : file_path_(file_path), current_index_(0), last_line_(1) {}
 
 ConfigParser::~ConfigParser() {}
 
@@ -41,6 +41,7 @@ void ConfigParser::tokenize() {
   tokens_.clear();
   token_lines_.clear();
   current_index_ = 0;
+  last_line_ = 1;
 
   std::ifstream file(file_path_.c_str());
   if (!file.is_open()) {
@@ -103,6 +104,7 @@ std::string ConfigParser::nextToken() {
   if (current_index_ >= tokens_.size()) {
     throw std::runtime_error(makeError("unexpected end of file"));
   }
+  last_line_ = token_lines_[current_index_];
   return tokens_[current_index_++];
 }
 
@@ -184,6 +186,7 @@ void ConfigParser::parseLocationBlock(ServerConfig& server) {
 
   LocationConfig location;
   location.path = path;
+  bool has_return = false;
 
   while (hasMoreTokens() && peekToken() != "}") {
     std::string directive = nextToken();
@@ -205,7 +208,11 @@ void ConfigParser::parseLocationBlock(ServerConfig& server) {
     } else if (directive == "cgi_path") {
       parseCgiPathDirective(location);
     } else if (directive == "return") {
+      if (has_return) {
+        throw std::runtime_error(makeError("duplicate 'return' directive"));
+      }
       parseReturnDirective(location);
+      has_return = true;
     } else {
       throw std::runtime_error(
           makeError("unknown location directive: " + directive));
@@ -222,6 +229,12 @@ void ConfigParser::parseLocationBlock(ServerConfig& server) {
 
 void ConfigParser::parseListenDirective(ServerConfig& server) {
   std::string port_str = nextToken();
+
+  // IPv6は非対応（'['を含む場合はエラー）
+  if (port_str.find('[') != std::string::npos) {
+    throw std::runtime_error(
+        makeError("IPv6 addresses are not supported: " + port_str));
+  }
 
   // host:port 形式の場合
   size_t colon_pos = port_str.find(':');
@@ -251,6 +264,10 @@ void ConfigParser::parseServerNameDirective(ServerConfig& server) {
         name[i] = name[i] + ('a' - 'A');
       }
     }
+    // 末尾ドット除去（FQDN対応）
+    if (!name.empty() && name[name.length() - 1] == '.') {
+      name.erase(name.length() - 1);
+    }
     server.server_names.push_back(name);
   }
   skipSemicolon();
@@ -266,6 +283,12 @@ void ConfigParser::parseErrorPageDirective(ServerConfig& server) {
     int code;
     iss >> code;
     codes.push_back(code);
+  }
+
+  // コードが1つもない場合はエラー
+  if (codes.empty()) {
+    throw std::runtime_error(
+        makeError("error_page requires at least one status code"));
   }
 
   // パスを取得
@@ -326,14 +349,26 @@ void ConfigParser::parseAllowedMethodsDirective(LocationConfig& location) {
 
   while (hasMoreTokens() && peekToken() != ";") {
     std::string method = nextToken();
+    HttpMethod m;
     if (method == "GET") {
-      location.allow_methods.push_back(GET);
+      m = GET;
     } else if (method == "POST") {
-      location.allow_methods.push_back(POST);
+      m = POST;
     } else if (method == "DELETE") {
-      location.allow_methods.push_back(DELETE);
+      m = DELETE;
     } else {
       throw std::runtime_error(makeError("unknown HTTP method: " + method));
+    }
+    // 重複チェック（重複は除外）
+    bool exists = false;
+    for (size_t i = 0; i < location.allow_methods.size(); ++i) {
+      if (location.allow_methods[i] == m) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
+      location.allow_methods.push_back(m);
     }
   }
   skipSemicolon();
@@ -405,6 +440,12 @@ size_t ConfigParser::parseSize(const std::string& size_str) const {
     throw std::runtime_error(makeError("invalid size: " + size_str));
   }
 
+  // オーバーフローチェック
+  size_t max_value = static_cast<size_t>(-1);
+  if (value > max_value / multiplier) {
+    throw std::runtime_error(makeError("size overflow: " + size_str));
+  }
+
   return value * multiplier;
 }
 
@@ -422,12 +463,6 @@ bool ConfigParser::isNumber(const std::string& str) const {
 
 std::string ConfigParser::makeError(const std::string& message) const {
   std::ostringstream oss;
-  oss << file_path_;
-  if (current_index_ > 0 && current_index_ <= token_lines_.size()) {
-    oss << ":" << token_lines_[current_index_ - 1];
-  } else if (current_index_ < token_lines_.size()) {
-    oss << ":" << token_lines_[current_index_];
-  }
-  oss << ": " << message;
+  oss << file_path_ << ":" << last_line_ << ": " << message;
   return oss.str();
 }
