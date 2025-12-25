@@ -608,6 +608,103 @@ void test_error_page_invalid_code_range() {
   PASS();
 }
 
+// Test: listen with multiple colons throws error
+void test_listen_multiple_colons() {
+  TEST("listen with multiple colons throws error");
+
+  const char* test_conf = "/tmp/test_listen_colons.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen localhost:8080:123;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on multiple colons");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("multiple colons") != std::string::npos);
+  }
+
+  PASS();
+}
+
+// Test: listen with empty host throws error
+void test_listen_empty_host() {
+  TEST("listen with empty host throws error");
+
+  const char* test_conf = "/tmp/test_listen_empty_host.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen :8080;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on empty host");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("empty host") != std::string::npos);
+  }
+
+  PASS();
+}
+
+// Test: listen with empty port throws error
+void test_listen_empty_port() {
+  TEST("listen with empty port throws error");
+
+  const char* test_conf = "/tmp/test_listen_empty_port.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 127.0.0.1:;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on empty port");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("empty port") != std::string::npos);
+  }
+
+  PASS();
+}
+
+// Test: error_page without path throws error
+void test_error_page_requires_path() {
+  TEST("error_page without path throws error");
+
+  const char* test_conf = "/tmp/test_error_page_no_path.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    error_page 404;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on missing path");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("URI/path") != std::string::npos);
+  }
+
+  PASS();
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -641,6 +738,10 @@ int main() {
   test_allowed_methods_dedup();
   test_listen_required();
   test_error_page_invalid_code_range();
+  test_listen_multiple_colons();
+  test_listen_empty_host();
+  test_listen_empty_port();
+  test_error_page_requires_path();
 
   std::cout << std::endl;
   std::cout << "========================================" << std::endl;

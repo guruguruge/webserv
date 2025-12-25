@@ -57,6 +57,8 @@ void ConfigParser::parse(MainConfig& config) {
 
 // ============================================================================
 // トークナイザ
+// 注意: クォートで囲まれた文字列は非対応。
+//       スペースを含むパス（例: root "/var/www/my site";)は使用不可。
 // ============================================================================
 
 void ConfigParser::tokenize() {
@@ -257,19 +259,36 @@ void ConfigParser::parseLocationBlock(ServerConfig& server) {
 // ============================================================================
 
 void ConfigParser::parseListenDirective(ServerConfig& server) {
-  std::string port_str = nextToken();
+  std::string value = nextToken();
 
   // IPv6は非対応（'['を含む場合はエラー）
-  if (port_str.find('[') != std::string::npos) {
+  if (value.find('[') != std::string::npos) {
     throw std::runtime_error(
-        makeError("IPv6 addresses are not supported: " + port_str));
+        makeError("IPv6 addresses are not supported: " + value));
   }
 
+  std::string port_str = value;
+
   // host:port 形式の場合
-  size_t colon_pos = port_str.find(':');
+  size_t colon_pos = value.find(':');
   if (colon_pos != std::string::npos) {
-    server.host = port_str.substr(0, colon_pos);
-    port_str = port_str.substr(colon_pos + 1);
+    // コロンが複数ある場合はエラー
+    if (value.find(':', colon_pos + 1) != std::string::npos) {
+      throw std::runtime_error(
+          makeError("invalid listen format (multiple colons): " + value));
+    }
+    // hostが空の場合はエラー
+    if (colon_pos == 0) {
+      throw std::runtime_error(
+          makeError("invalid listen format (empty host): " + value));
+    }
+    // portが空の場合はエラー
+    if (colon_pos == value.size() - 1) {
+      throw std::runtime_error(
+          makeError("invalid listen format (empty port): " + value));
+    }
+    server.host = value.substr(0, colon_pos);
+    port_str = value.substr(colon_pos + 1);
   }
 
   // ポート番号を数値に変換
@@ -324,6 +343,11 @@ void ConfigParser::parseErrorPageDirective(ServerConfig& server) {
   if (codes.empty()) {
     throw std::runtime_error(
         makeError("error_page requires at least one status code"));
+  }
+
+  // パスが無い場合はエラー
+  if (peekToken() == ";") {
+    throw std::runtime_error(makeError("error_page requires a URI/path"));
   }
 
   // パスを取得
