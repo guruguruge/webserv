@@ -28,13 +28,17 @@ static int g_pass_count = 0;
     return;                                    \
   } while (0)
 
-#define ASSERT_EQ(expected, actual) \
-  if ((expected) != (actual))       \
-  FAIL(#actual " != " #expected)
+#define ASSERT_EQ(expected, actual)   \
+  do {                                \
+    if ((expected) != (actual))       \
+      FAIL(#actual " != " #expected); \
+  } while (0)
 
-#define ASSERT_TRUE(cond) \
-  if (!(cond))            \
-  FAIL(#cond " is false")
+#define ASSERT_TRUE(cond)      \
+  do {                         \
+    if (!(cond))               \
+      FAIL(#cond " is false"); \
+  } while (0)
 
 // ============================================================================
 // テストケース

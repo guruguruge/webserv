@@ -47,10 +47,12 @@ void ConfigParser::parse(MainConfig& config) {
     if (token == "server") {
       parseServerBlock(config);
     } else if (token == "#") {
-      // コメントはトークナイズ時にスキップされるはずだが念のため
+      // 通常はトークナイズ時（tokenize）でコメントが除去されるが、
+      // 予期せぬ '#' トークンが残っていた場合に備えた防御的なチェック
       nextToken();
     } else {
-      throw std::runtime_error(makeError("unexpected token: " + token));
+      throw std::runtime_error(
+          makeError("expected 'server' directive at top level, got: " + token));
     }
   }
 }
@@ -332,7 +334,9 @@ void ConfigParser::parseErrorPageDirective(ServerConfig& server) {
     std::string code_str = nextToken();
     std::istringstream iss(code_str);
     int code;
-    iss >> code;
+    if (!(iss >> code)) {
+      throw std::runtime_error(makeError("invalid status code: " + code_str));
+    }
     // ステータスコードは100-599の範囲
     if (code < STATUS_CODE_MIN || code > STATUS_CODE_MAX) {
       throw std::runtime_error(
