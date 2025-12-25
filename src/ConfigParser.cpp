@@ -294,7 +294,9 @@ void ConfigParser::parseListenDirective(ServerConfig& server) {
   // ポート番号を数値に変換
   std::istringstream iss(port_str);
   int port;
-  if (!(iss >> port) || port < PORT_MIN || port > PORT_MAX) {
+  char remaining;
+  if (!(iss >> port) || iss.get(remaining) || port < PORT_MIN ||
+      port > PORT_MAX) {
     throw std::runtime_error(makeError("invalid port number: " + port_str));
   }
   server.listen_port = port;

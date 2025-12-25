@@ -705,6 +705,30 @@ void test_error_page_requires_path() {
   PASS();
 }
 
+// Test: listen with trailing characters throws error
+void test_listen_trailing_chars() {
+  TEST("listen with trailing characters throws error");
+
+  const char* test_conf = "/tmp/test_listen_trailing.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080abc;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on trailing characters");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("invalid port number") != std::string::npos);
+  }
+
+  PASS();
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -742,6 +766,7 @@ int main() {
   test_listen_empty_host();
   test_listen_empty_port();
   test_error_page_requires_path();
+  test_listen_trailing_chars();
 
   std::cout << std::endl;
   std::cout << "========================================" << std::endl;
