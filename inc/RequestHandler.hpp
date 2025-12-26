@@ -66,7 +66,7 @@ class RequestHandler {
                   const LocationConfig* location);
 
   // ディレクトリリスティング (AutoIndex) の生成
-  void _generateAutoIndex(Client* client, const std::string& dirPath);
+  int _generateAutoIndex(Client* client, const std::string& dirPath);
 
   // HTTPリダイレクト処理 (301, 302など)
   void _handleRedirection(Client* client, const LocationConfig* location);

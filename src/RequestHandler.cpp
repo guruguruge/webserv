@@ -534,8 +534,7 @@ int RequestHandler::_handleGet(Client* client, const std::string& realPath,
     if (_isFileExist(candidatePath)) {
       pathToFile = candidatePath;
     } else if (location && location->autoindex) {
-      _generateAutoIndex(client, pathToFile);
-      return 0;
+      return _generateAutoIndex(client, pathToFile);
     } else {
       return 403;  // Forbidden
     }
@@ -614,24 +613,23 @@ int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
   return 0;
 }
 
-void RequestHandler::_generateAutoIndex(Client* client,
-                                        const std::string& dirPath) {
+int RequestHandler::_generateAutoIndex(Client* client,
+                                       const std::string& dirPath) {
   std::vector<FileEntry> entries;
   if (!collectFileEntries(dirPath, entries)) {
-    _handleError(client, 403);  // Forbidden
-    return;
+    return 403;  // Forbidden
   }
 
   std::string htmlContent;
   if (!generateAutoIndexHtml(entries, client->req.getPath(), htmlContent)) {
-    _handleError(client, 500);  // Internal server error
-    return;
+    return 500;  // Internal server error
   }
 
   client->res.setStatusCode(200);
   client->res.setHeader("Content-Type", "text/html");
   client->res.setBody(htmlContent);
   client->readyToWrite();
+  return 0;
 }
 
 // Handle HTTP redirection specified in the Location configulation.
