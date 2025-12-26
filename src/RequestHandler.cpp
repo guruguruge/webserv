@@ -20,6 +20,41 @@ std::string toString(const T& value) {
   return oss.str();
 }
 
+// Escapes special characters in a string for HTML usage.
+// Prevents XSS vulnerabilities.
+//
+// Args:
+//   str: The input string.
+//
+// Returns:
+//   The escaped string.
+std::string escapeHtml(const std::string& str) {
+  std::string result;
+  for (std::string::const_iterator it = str.begin(); it != str.end(); ++it) {
+    switch (*it) {
+      case '&':
+        result += "&amp";
+        break;
+      case '<':
+        result += "lt";
+        break;
+      case '>':
+        result += "gt";
+        break;
+      case '"':
+        result += "&quot";
+        break;
+      case '\'':
+        result += "&#39";
+        break;
+      default:
+        result += (*it);
+        break;
+    }
+  }
+  return result;
+}
+
 // Normalizes the URI to prevent path traversal attacks.
 // Resolves segments like "/../" to ensure the path does not traverse above the root directory.
 //
@@ -32,6 +67,10 @@ static std::string normalizeUri(const std::string& uri) {
   std::vector<std::string> parts;
   std::string::size_type start = 0;
   std::string::size_type end;
+
+  if (uri.empty()) {
+    return "/";
+  }
 
   while ((end = uri.find('/', start)) != std::string::npos) {
     std::string part = uri.substr(start, end - start);
@@ -227,10 +266,12 @@ bool generateAutoIndexHtml(const std::vector<FileEntry>& entries,
                            std::string& outHtml) {
   std::ostringstream htmlOss;
 
+  std::string safeUri = escapeHtml(requestUri);
+
   htmlOss << "<html>\r\n"
-          << "<head><title>Index of " << requestUri << "</title></head>\r\n"
+          << "<head><title>Index of " << safeUri << "</title></head>\r\n"
           << "<body>\r\n"
-          << "<h1>Index of " << requestUri << "</h1>\r\n"
+          << "<h1>Index of " << safeUri << "</h1>\r\n"
           << "<hr><pre>\r\n";
   htmlOss << std::left << std::setw(50) << "Name" << std::setw(25)
           << "Last modified" << std::right << std::setw(15) << "Size" << "\r\n";
@@ -257,10 +298,13 @@ bool generateAutoIndexHtml(const std::vector<FileEntry>& entries,
       return false;
     }
 
+    std::string safeDisplayName = escapeHtml(displayName);
+    std::string safeLinkName = escapeHtml(linkName);
+
     // HTML行生成
-    htmlOss << "<a href=\"" << displayName << "\">" << std::left
-            << std::setw(50) << linkName << "</a> " << std::setw(25) << timeStr
-            << std::right << std::setw(15) << sizeStr << "\r\n";
+    htmlOss << "<a href=\"" << safeDisplayName << "\">" << std::left
+            << std::setw(50) << safeLinkName << "</a> " << std::setw(25)
+            << timeStr << std::right << std::setw(15) << sizeStr << "\r\n";
   }
 
   htmlOss << "</pre><hr></body>\r\n</html>";
