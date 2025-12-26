@@ -341,6 +341,9 @@ std::string resolveUploadPath(const HttpRequest& req,
     if (lastSlash != std::string::npos && lastSlash + 1 < uri.size()) {
       filename = uri.substr(lastSlash + 1);
     }
+    if (filename == "." || filename == "..") {
+      filename = "";
+    }
     return targetPath + filename;
   }
   return realPath;
