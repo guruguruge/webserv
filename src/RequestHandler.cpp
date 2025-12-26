@@ -33,19 +33,19 @@ std::string escapeHtml(const std::string& str) {
   for (std::string::const_iterator it = str.begin(); it != str.end(); ++it) {
     switch (*it) {
       case '&':
-        result += "&amp";
+        result += "&amp;";
         break;
       case '<':
-        result += "lt";
+        result += "&lt;";
         break;
       case '>':
-        result += "gt";
+        result += "&gt;";
         break;
       case '"':
-        result += "&quot";
+        result += "&quot;";
         break;
       case '\'':
-        result += "&#39";
+        result += "&#39;";
         break;
       default:
         result += (*it);
