@@ -169,7 +169,7 @@ std::string formatTime(time_t timer) {
     month++;
   }
 
-  int day = days += 1;
+  int day = days + 1;
 
   std::ostringstream oss;
   oss << std::setw(2) << std::setfill('0') << day << "-" << monthNames[month]
