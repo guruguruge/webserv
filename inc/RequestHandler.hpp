@@ -1,10 +1,13 @@
 #ifndef REQUESTHANDLER_HPP
 #define REQUESTHANDLER_HPP
 
+#include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <algorithm>
 #include <cstring>
+#include <iomanip>
 #include <string>
 #include "Client.hpp"
 #include "Config.hpp"
@@ -49,12 +52,12 @@ class RequestHandler {
   // --- Method Handlers ---
   // 内部で client->readyToWrite() を呼んで状態遷移する
 
-  void _handleGet(Client* client, const std::string& realPath,
+  int _handleGet(Client* client, const std::string& realPath,
+                 const LocationConfig* location);
+  int _handlePost(Client* client, const std::string& realPath,
                   const LocationConfig* location);
-  void _handlePost(Client* client, const std::string& realPath,
-                   const LocationConfig* location);
-  void _handleDelete(Client* client, const std::string& realPath,
-                     const LocationConfig* location);
+  int _handleDelete(Client* client, const std::string& realPath,
+                    const LocationConfig* location);
 
   // --- Specific Features ---
 
@@ -63,13 +66,13 @@ class RequestHandler {
                   const LocationConfig* location);
 
   // ディレクトリリスティング (AutoIndex) の生成
-  void _generateAutoIndex(Client* client, const std::string& dirPath);
+  int _generateAutoIndex(Client* client, const std::string& dirPath);
 
   // HTTPリダイレクト処理 (301, 302など)
   void _handleRedirection(Client* client, const LocationConfig* location);
 
   // エラーレスポンスの生成 (内部で client->readyToWrite() を呼ぶ)
-  void _handleError(Client* client, int statusCode);
+  bool _handleError(Client* client, int statusCode);
 
   // --- Utilities ---
   bool _isCgiRequest(const std::string& path, const LocationConfig* location);
