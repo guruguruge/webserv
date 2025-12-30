@@ -616,6 +616,10 @@ size_t HttpRequest::getContentLength() const {
   return _contentLength;
 }
 
+std::string HttpRequest::getQuery() const {
+  return _query;
+}
+
 // =============================================================================
 // Config setters/getters
 // =============================================================================
