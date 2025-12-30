@@ -387,6 +387,70 @@ int removeFile(const std::string& path) {
   return 500;    // Internal Error
 }
 
+char** createCgiEnv(const HttpRequest& req, const std::string& realPath,
+                    const LocationConfig* location) {
+  (void)location;
+  std::map<std::string, std::string> env;
+
+  env["SERVER_SOFTWARE"] = "webserv/1.0";
+  env["SERVER_PROTOCOL"] = "HTTP/1.1";
+  env["GATEWAY_INTERFACE"] = "CGI/1.1";
+  HttpMethod method = req.getMethod();
+  switch (method) {
+    case GET:
+      env["REQUEST_METHOD"] = "GET";
+      break;
+    case POST:
+      env["REQUEST_METHOD"] = "POST";
+      break;
+    case DELETE:
+      env["REQUEST_METHOD"] = "DELETE";
+      break;
+    default:
+      env["REQUEST_METHOD"] = "UNKNOWN";
+      break;
+  }
+  env["SCRIPT_NAME"] = req.getPath();
+  env["SCRIPT_FILENAME"] = realPath;
+  env["PATH_INFO"] = req.getPath();
+  env["PATH_TRANSLATED"] = realPath;
+  env["QUERY_STRING"] = "";  // TODO: Extract from URI if available
+
+  std::string contentType = req.getHeader("Content-Type");
+  if (!contentType.empty()) {
+    env["CONTENT_TYPE"] = contentType;
+  }
+  std::string contentLength = req.getHeader("Content-Length");
+  if (!contentLength.empty()) {
+    env["CONTENT_LENGTH"] = contentLength;
+  }
+
+  char** envp = NULL;
+  try {
+    envp = new char*[env.size() + 1];
+    for (size_t i = 0; i <= env.size(); ++i)
+      envp[i] = NULL;
+    size_t k = 0;
+    for (std::map<std::string, std::string>::const_iterator it = env.begin();
+         it != env.end(); ++it, ++k) {
+      std::string s = it->first + "=" + it->second;
+      envp[k] = new char[s.size() + 1];
+      std::copy(s.begin(), s.end(), envp[k]);
+      envp[k][s.size()] = '\0';
+    }
+  } catch (const std::bad_alloc& e) {
+    std::cerr << "[Error] createCgiEnv: memory allocation failed: " << e.what()
+              << std::endl;
+    if (envp) {
+      for (size_t i = 0; envp[i] != NULL; ++i)
+        delete[] envp[i];
+      delete[] envp;
+    }
+    return NULL;
+  }
+  return envp;
+}
+
 }  // namespace
 
 RequestHandler::RequestHandler(const MainConfig& config) : _config(config) {}
@@ -446,6 +510,20 @@ void RequestHandler::handle(Client* client) {
         }  // Method not allowed
         return;
       }
+    }
+
+    if (_isCgiRequest(realPath, matchedLocation)) {
+      if (!_isFileExist(realPath)) {
+        if (_handleError(client, 404))
+          continue;  // Not found
+        return;
+      }
+      if (_handleCgi(client, realPath, matchedLocation) == 0) {
+        return;
+      }
+      if (_handleError(client, 500))
+        continue;  // internal server error
+      return;
     }
 
     int procResult = 0;
@@ -616,6 +694,69 @@ int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
   return 0;
 }
 
+int RequestHandler::_handleCgi(Client* client, const std::string& scriptPath,
+                               const LocationConfig* location) {
+  if (!location) {
+    return 500;  // internal server error;
+  }
+
+  int pipe_in[2];
+  int pipe_out[2];
+
+  if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {
+    std::cerr << "[Error] pipe creation failed: " << strerror(errno)
+              << std::endl;
+    return 500;  // internal server error
+  }
+  pid_t pid = fork();
+  if (pid < 0) {
+    std::cerr << "[Error] fork failed: " << strerror(errno) << std::endl;
+    close(pipe_in[0]);
+    close(pipe_in[1]);
+    close(pipe_out[0]);
+    close(pipe_out[1]);
+    return 500;  // internal server error
+  }
+  if (pid == 0) {
+    dup2(pipe_in[0], STDIN_FILENO);
+    dup2(pipe_out[1], STDOUT_FILENO);
+    close(pipe_in[0]);
+    close(pipe_in[1]);
+    close(pipe_out[0]);
+    close(pipe_out[1]);
+
+    char** env = createCgiEnv(client->req, scriptPath, location);
+
+    if (!env) {
+      std::cerr << "[Error] Failed to create CGI environment" << std::endl;
+      exit(1);
+    }
+
+    char* argv[3];
+    if (!location->cgi_path.empty()) {
+      argv[0] = const_cast<char*>(location->cgi_path.c_str());
+      argv[1] = const_cast<char*>(scriptPath.c_str());
+      argv[2] = NULL;
+      execve(location->cgi_path.c_str(), argv, env);
+    } else {
+      argv[0] = const_cast<char*>(scriptPath.c_str());
+      argv[1] = NULL;
+      execve(scriptPath.c_str(), argv, env);
+    }
+
+    std::cerr << "[Error] execve failed: " << strerror(errno) << std::endl;
+    exit(1);
+  }
+
+  close(pipe_in[0]);
+  close(pipe_out[1]);
+  client->setCgiPid(pid);
+  client->setCgiStdinFd(pipe_in[1]);
+  client->setCgiStdoutFd(pipe_out[0]);
+  client->setState(WAITING_CGI);
+  return (0);
+}
+
 int RequestHandler::_generateAutoIndex(Client* client,
                                        const std::string& dirPath) {
   std::vector<FileEntry> entries;
@@ -687,6 +828,19 @@ bool RequestHandler::_handleError(Client* client, int statusCode) {
   client->res.makeErrorResponse(statusCode, NULL);
   client->readyToWrite();
   return false;
+}
+
+bool RequestHandler::_isCgiRequest(const std::string& path,
+                                   const LocationConfig* location) {
+  if (!location || location->cgi_extension.empty()) {
+    return false;
+  }
+  if (path.length() < location->cgi_extension.length()) {
+    return false;
+  }
+  return path.compare(path.length() - location->cgi_extension.length(),
+                      location->cgi_extension.length(),
+                      location->cgi_extension) == 0;
 }
 
 // Determines if the specified path is a directory.
