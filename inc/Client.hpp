@@ -64,6 +64,11 @@ class Client {
   size_t getCgiStdinOffset() const;
   void advanceCgiStdinOffset(size_t bytes);
 
+  // CGI設定用セッター (RequestHandlerから使用)
+  void setCgiPid(pid_t pid);
+  void setCgiStdinFd(int fd);
+  void setCgiStdoutFd(int fd);
+
   // --- Context 管理 ---
   void setContext(EpollContext* ctx);
   EpollContext* getContext() const;
