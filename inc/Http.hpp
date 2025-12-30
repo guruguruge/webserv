@@ -100,6 +100,8 @@ class HttpRequest {
 
   void setConfig(const ServerConfig* config);
   const ServerConfig* getConfig() const;
+
+  void setPath(const std::string& path);
 };
 
 // --- HTTP Response ---
