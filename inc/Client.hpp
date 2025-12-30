@@ -66,8 +66,8 @@ class Client {
 
   // CGI設定用セッター (RequestHandlerから使用)
   void setCgiPid(pid_t pid);
-  void setCgiInFd(int fd);
-  void setCgiOutFd(int fd);
+  void setCgiStdinFd(int fd);
+  void setCgiStdoutFd(int fd);
 
   // --- Context 管理 ---
   void setContext(EpollContext* ctx);

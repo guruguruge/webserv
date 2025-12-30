@@ -161,11 +161,11 @@ void Client::setCgiPid(pid_t pid) {
   _cgi_pid = pid;
 }
 
-void Client::setCgiInFd(int fd) {
+void Client::setCgiStdinFd(int fd) {
   _cgi_stdin_fd = fd;
 }
 
-void Client::setCgiOutFd(int fd) {
+void Client::setCgiStdoutFd(int fd) {
   _cgi_stdout_fd = fd;
 }
 
