@@ -414,7 +414,7 @@ char** createCgiEnv(const HttpRequest& req, const std::string& realPath,
   env["SCRIPT_FILENAME"] = realPath;
   env["PATH_INFO"] = req.getPath();
   env["PATH_TRANSLATED"] = realPath;
-  env["QUERY_STRING"] = "";  // TODO: Extract from URI if available
+  env["QUERY_STRING"] = req.getQuery();
 
   std::string contentType = req.getHeader("Content-Type");
   if (!contentType.empty()) {
@@ -703,7 +703,14 @@ int RequestHandler::_handleCgi(Client* client, const std::string& scriptPath,
   int pipe_in[2];
   int pipe_out[2];
 
-  if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {
+  if (pipe(pipe_in) < 0) {
+    std::cerr << "[Error] pipe creation failed: " << strerror(errno)
+              << std::endl;
+    return 500;  // internal server error
+  }
+  if (pipe(pipe_out) < 0) {
+    close(pipe_in[0]);
+    close(pipe_in[1]);
     std::cerr << "[Error] pipe creation failed: " << strerror(errno)
               << std::endl;
     return 500;  // internal server error
@@ -718,6 +725,8 @@ int RequestHandler::_handleCgi(Client* client, const std::string& scriptPath,
     return 500;  // internal server error
   }
   if (pid == 0) {
+    close(client->getFd());
+
     dup2(pipe_in[0], STDIN_FILENO);
     dup2(pipe_out[1], STDOUT_FILENO);
     close(pipe_in[0]);
