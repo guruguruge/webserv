@@ -733,6 +733,54 @@ void test_listen_trailing_chars() {
   PASS();
 }
 
+// Test: MainConfig::load() success
+void test_mainconfig_load_success() {
+  TEST("MainConfig::load() returns true on valid config");
+
+  const char* test_conf = "/tmp/test_load_success.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    server_name localhost;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ASSERT_TRUE(config.load(test_conf));
+  ASSERT_EQ(1u, config.servers.size());
+  ASSERT_EQ(8080, config.servers[0].listen_port);
+
+  PASS();
+}
+
+// Test: MainConfig::load() failure
+void test_mainconfig_load_failure() {
+  TEST("MainConfig::load() returns false on invalid config");
+
+  const char* test_conf = "/tmp/test_load_failure.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    server_name localhost;\n";  // listen missing
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ASSERT_TRUE(!config.load(test_conf));  // should return false
+  ASSERT_EQ(0u, config.servers.size());  // no servers loaded
+
+  PASS();
+}
+
+// Test: MainConfig::load() file not found
+void test_mainconfig_load_file_not_found() {
+  TEST("MainConfig::load() returns false when file not found");
+
+  MainConfig config;
+  ASSERT_TRUE(!config.load("/tmp/nonexistent_config_file_12345.conf"));
+
+  PASS();
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -771,6 +819,9 @@ int main() {
   test_listen_empty_port();
   test_error_page_requires_path();
   test_listen_trailing_chars();
+  test_mainconfig_load_success();
+  test_mainconfig_load_failure();
+  test_mainconfig_load_file_not_found();
 
   std::cout << std::endl;
   std::cout << "========================================" << std::endl;
