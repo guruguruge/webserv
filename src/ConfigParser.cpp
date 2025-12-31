@@ -373,6 +373,9 @@ void ConfigParser::parseClientMaxBodySizeDirective(ServerConfig& server) {
 }
 
 void ConfigParser::parseServerRootDirective(ServerConfig& server) {
+  if (peekToken() == ";") {
+    throw std::runtime_error(makeError("root directive requires a path"));
+  }
   server.root = nextToken();
   skipSemicolon();
 }
@@ -382,16 +385,25 @@ void ConfigParser::parseServerRootDirective(ServerConfig& server) {
 // ============================================================================
 
 void ConfigParser::parseRootDirective(LocationConfig& location) {
+  if (peekToken() == ";") {
+    throw std::runtime_error(makeError("root directive requires a path"));
+  }
   location.root = nextToken();
   skipSemicolon();
 }
 
 void ConfigParser::parseAliasDirective(LocationConfig& location) {
+  if (peekToken() == ";") {
+    throw std::runtime_error(makeError("alias directive requires a path"));
+  }
   location.alias = nextToken();
   skipSemicolon();
 }
 
 void ConfigParser::parseIndexDirective(LocationConfig& location) {
+  if (peekToken() == ";") {
+    throw std::runtime_error(makeError("index directive requires a filename"));
+  }
   location.index = nextToken();
   skipSemicolon();
 }
@@ -440,16 +452,27 @@ void ConfigParser::parseAllowedMethodsDirective(LocationConfig& location) {
 }
 
 void ConfigParser::parseUploadPathDirective(LocationConfig& location) {
+  if (peekToken() == ";") {
+    throw std::runtime_error(
+        makeError("upload_path directive requires a path"));
+  }
   location.upload_path = nextToken();
   skipSemicolon();
 }
 
 void ConfigParser::parseCgiExtensionDirective(LocationConfig& location) {
+  if (peekToken() == ";") {
+    throw std::runtime_error(
+        makeError("cgi_extension directive requires an extension"));
+  }
   location.cgi_extension = nextToken();
   skipSemicolon();
 }
 
 void ConfigParser::parseCgiPathDirective(LocationConfig& location) {
+  if (peekToken() == ";") {
+    throw std::runtime_error(makeError("cgi_path directive requires a path"));
+  }
   location.cgi_path = nextToken();
   skipSemicolon();
 }
