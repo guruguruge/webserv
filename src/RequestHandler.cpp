@@ -727,8 +727,24 @@ int RequestHandler::_handleCgi(Client* client, const std::string& scriptPath,
   if (pid == 0) {
     close(client->getFd());
 
-    dup2(pipe_in[0], STDIN_FILENO);
-    dup2(pipe_out[1], STDOUT_FILENO);
+    if (dup2(pipe_in[0], STDIN_FILENO) < 0) {
+      std::cerr << "[Error] dup2 stdin failed: " << strerror(errno)
+                << std::endl;
+      close(pipe_in[0]);
+      close(pipe_in[1]);
+      close(pipe_out[0]);
+      close(pipe_out[1]);
+      exit(1);
+    }
+    if (dup2(pipe_out[1], STDOUT_FILENO)) {
+      std::cerr << "[Error] dup2 stdout failed: " << strerror(errno)
+                << std::endl;
+      close(pipe_in[0]);
+      close(pipe_in[1]);
+      close(pipe_out[0]);
+      close(pipe_out[1]);
+      exit(1);
+    }
     close(pipe_in[0]);
     close(pipe_in[1]);
     close(pipe_out[0]);

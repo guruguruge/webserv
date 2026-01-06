@@ -97,7 +97,7 @@ class HttpRequest {
   std::string getHeader(const std::string& key) const;
   const std::vector<char>& getBody() const;
   size_t getContentLength() const;
-  std::string HttpRequest::getQuery() const;
+  std::string getQuery() const;
   void setConfig(const ServerConfig* config);
   const ServerConfig* getConfig() const;
 
