@@ -49,11 +49,11 @@ class ConfigParser {
   void parse(MainConfig& config);
 
  private:
-  std::string file_path_;            ///< 設定ファイルパス
-  std::vector<std::string> tokens_;  ///< トークンリスト
-  std::vector<int> token_lines_;     ///< 各トークンの行番号
-  size_t current_index_;             ///< 現在のトークン位置
-  int last_line_;                    ///< 最後に消費したトークンの行番号
+  std::string _file_path;            ///< 設定ファイルパス
+  std::vector<std::string> _tokens;  ///< トークンリスト
+  std::vector<int> _token_lines;     ///< 各トークンの行番号
+  size_t _current_index;             ///< 現在のトークン位置
+  int _last_line;                    ///< 最後に消費したトークンの行番号
 
   // ============================================================================
   // トークナイザ
@@ -63,14 +63,14 @@ class ConfigParser {
    * @brief ファイルを読み込んでトークンに分割
    * @throw std::runtime_error ファイル読み込みエラー時
    */
-  void tokenize();
+  void _tokenize();
 
   /**
    * @brief 1文字がトークン区切り文字かどうか判定
    * @param c 判定する文字
    * @return 区切り文字なら true
    */
-  bool isDelimiter(char c) const;
+  bool _isDelimiter(char c) const;
 
   // ============================================================================
   // トークン操作
@@ -81,32 +81,32 @@ class ConfigParser {
    * @return 次のトークン
    * @throw std::runtime_error トークンがない場合
    */
-  std::string nextToken();
+  std::string _nextToken();
 
   /**
    * @brief 現在のトークンを取得（位置は進めない）
    * @return 現在のトークン、なければ空文字列
    */
-  std::string peekToken() const;
+  std::string _peekToken() const;
 
   /**
    * @brief まだトークンが残っているか確認
    * @return 残っていれば true
    */
-  bool hasMoreTokens() const;
+  bool _hasMoreTokens() const;
 
   /**
    * @brief 期待するトークンを消費、一致しなければエラー
    * @param expected 期待するトークン
    * @throw std::runtime_error 一致しない場合
    */
-  void expectToken(const std::string& expected);
+  void _expectToken(const std::string& expected);
 
   /**
    * @brief セミコロンを消費
    * @throw std::runtime_error セミコロンがない場合
    */
-  void skipSemicolon();
+  void _skipSemicolon();
 
   // ============================================================================
   // パーサ（ブロック）
@@ -116,13 +116,13 @@ class ConfigParser {
    * @brief serverブロックをパース
    * @param config パース結果を格納するMainConfig
    */
-  void parseServerBlock(MainConfig& config);
+  void _parseServerBlock(MainConfig& config);
 
   /**
    * @brief locationブロックをパース
    * @param server パース結果を格納するServerConfig
    */
-  void parseLocationBlock(ServerConfig& server);
+  void _parseLocationBlock(ServerConfig& server);
 
   // ============================================================================
   // パーサ（server ディレクティブ）
@@ -132,31 +132,31 @@ class ConfigParser {
    * @brief listenディレクティブをパース
    * @param server パース結果を格納するServerConfig
    */
-  void parseListenDirective(ServerConfig& server);
+  void _parseListenDirective(ServerConfig& server);
 
   /**
    * @brief server_nameディレクティブをパース
    * @param server パース結果を格納するServerConfig
    */
-  void parseServerNameDirective(ServerConfig& server);
+  void _parseServerNameDirective(ServerConfig& server);
 
   /**
    * @brief error_pageディレクティブをパース
    * @param server パース結果を格納するServerConfig
    */
-  void parseErrorPageDirective(ServerConfig& server);
+  void _parseErrorPageDirective(ServerConfig& server);
 
   /**
    * @brief client_max_body_sizeディレクティブをパース
    * @param server パース結果を格納するServerConfig
    */
-  void parseClientMaxBodySizeDirective(ServerConfig& server);
+  void _parseClientMaxBodySizeDirective(ServerConfig& server);
 
   /**
    * @brief server直下のrootディレクティブをパース
    * @param server パース結果を格納するServerConfig
    */
-  void parseServerRootDirective(ServerConfig& server);
+  void _parseServerRootDirective(ServerConfig& server);
 
   // ============================================================================
   // パーサ（location ディレクティブ）
@@ -166,55 +166,55 @@ class ConfigParser {
    * @brief rootディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseRootDirective(LocationConfig& location);
+  void _parseRootDirective(LocationConfig& location);
 
   /**
    * @brief aliasディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseAliasDirective(LocationConfig& location);
+  void _parseAliasDirective(LocationConfig& location);
 
   /**
    * @brief indexディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseIndexDirective(LocationConfig& location);
+  void _parseIndexDirective(LocationConfig& location);
 
   /**
    * @brief autoindexディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseAutoindexDirective(LocationConfig& location);
+  void _parseAutoindexDirective(LocationConfig& location);
 
   /**
    * @brief allowed_methodsディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseAllowedMethodsDirective(LocationConfig& location);
+  void _parseAllowedMethodsDirective(LocationConfig& location);
 
   /**
    * @brief upload_pathディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseUploadPathDirective(LocationConfig& location);
+  void _parseUploadPathDirective(LocationConfig& location);
 
   /**
    * @brief cgi_extensionディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseCgiExtensionDirective(LocationConfig& location);
+  void _parseCgiExtensionDirective(LocationConfig& location);
 
   /**
    * @brief cgi_pathディレクティブをパース
    * @param location パース結果を格納するLocationConfig
    */
-  void parseCgiPathDirective(LocationConfig& location);
+  void _parseCgiPathDirective(LocationConfig& location);
 
   /**
    * @brief returnディレクティブをパース（リダイレクト）
    * @param location パース結果を格納するLocationConfig
    */
-  void parseReturnDirective(LocationConfig& location);
+  void _parseReturnDirective(LocationConfig& location);
 
   // ============================================================================
   // ユーティリティ
@@ -229,21 +229,21 @@ class ConfigParser {
    * @return バイト数
    * @throw std::runtime_error 不正な形式の場合
    */
-  size_t parseSize(const std::string& size_str) const;
+  size_t _parseSize(const std::string& size_str) const;
 
   /**
    * @brief 文字列が数値かどうか判定
    * @param str 判定する文字列
    * @return 数値なら true
    */
-  bool isNumber(const std::string& str) const;
+  bool _isNumber(const std::string& str) const;
 
   /**
    * @brief エラーメッセージを生成
    * @param message エラー内容
    * @return ファイル名と行番号を含むエラーメッセージ
    */
-  std::string makeError(const std::string& message) const;
+  std::string _makeError(const std::string& message) const;
 
   // コピー禁止
   ConfigParser(const ConfigParser&);

@@ -31,7 +31,7 @@ const size_t GIGABYTE = 1024 * 1024 * 1024;
 // ============================================================================
 
 ConfigParser::ConfigParser(const std::string& file_path)
-    : file_path_(file_path), current_index_(0), last_line_(1) {}
+    : _file_path(file_path), _current_index(0), _last_line(1) {}
 
 ConfigParser::~ConfigParser() {}
 
@@ -40,19 +40,19 @@ ConfigParser::~ConfigParser() {}
 // ============================================================================
 
 void ConfigParser::parse(MainConfig& config) {
-  tokenize();
+  _tokenize();
 
-  while (hasMoreTokens()) {
-    std::string token = peekToken();
+  while (_hasMoreTokens()) {
+    std::string token = _peekToken();
     if (token == "server") {
-      parseServerBlock(config);
+      _parseServerBlock(config);
     } else if (token == "#") {
       // 通常はトークナイズ時（tokenize）でコメントが除去されるが、
       // 予期せぬ '#' トークンが残っていた場合に備えた防御的なチェック
-      nextToken();
+      _nextToken();
     } else {
-      throw std::runtime_error(
-          makeError("expected 'server' directive at top level, got: " + token));
+      throw std::runtime_error(_makeError(
+          "expected 'server' directive at top level, got: " + token));
     }
   }
 }
@@ -63,16 +63,16 @@ void ConfigParser::parse(MainConfig& config) {
 //       スペースを含むパス（例: root "/var/www/my site";)は使用不可。
 // ============================================================================
 
-void ConfigParser::tokenize() {
+void ConfigParser::_tokenize() {
   // 状態を初期化（複数回呼び出しに対応）
-  tokens_.clear();
-  token_lines_.clear();
-  current_index_ = 0;
-  last_line_ = 1;
+  _tokens.clear();
+  _token_lines.clear();
+  _current_index = 0;
+  _last_line = 1;
 
-  std::ifstream file(file_path_.c_str());
+  std::ifstream file(_file_path.c_str());
   if (!file.is_open()) {
-    throw std::runtime_error("failed to open config file: " + file_path_);
+    throw std::runtime_error("failed to open config file: " + _file_path);
   }
 
   std::string line;
@@ -92,17 +92,17 @@ void ConfigParser::tokenize() {
     for (size_t i = 0; i < line.length(); ++i) {
       char c = line[i];
 
-      if (isDelimiter(c)) {
+      if (_isDelimiter(c)) {
         // 現在のトークンを保存
         if (!token.empty()) {
-          tokens_.push_back(token);
-          token_lines_.push_back(line_number);
+          _tokens.push_back(token);
+          _token_lines.push_back(line_number);
           token.clear();
         }
         // 区切り文字自体もトークンとして保存（空白以外）
         if (c == '{' || c == '}' || c == ';') {
-          tokens_.push_back(std::string(1, c));
-          token_lines_.push_back(line_number);
+          _tokens.push_back(std::string(1, c));
+          _token_lines.push_back(line_number);
         }
       } else {
         token += c;
@@ -111,14 +111,14 @@ void ConfigParser::tokenize() {
 
     // 行末のトークン
     if (!token.empty()) {
-      tokens_.push_back(token);
-      token_lines_.push_back(line_number);
+      _tokens.push_back(token);
+      _token_lines.push_back(line_number);
     }
   }
   file.close();
 }
 
-bool ConfigParser::isDelimiter(char c) const {
+bool ConfigParser::_isDelimiter(char c) const {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '{' ||
          c == '}' || c == ';';
 }
@@ -127,132 +127,132 @@ bool ConfigParser::isDelimiter(char c) const {
 // トークン操作
 // ============================================================================
 
-std::string ConfigParser::nextToken() {
-  if (current_index_ >= tokens_.size()) {
-    throw std::runtime_error(makeError("unexpected end of file"));
+std::string ConfigParser::_nextToken() {
+  if (_current_index >= _tokens.size()) {
+    throw std::runtime_error(_makeError("unexpected end of file"));
   }
-  last_line_ = token_lines_[current_index_];
-  return tokens_[current_index_++];
+  _last_line = _token_lines[_current_index];
+  return _tokens[_current_index++];
 }
 
-std::string ConfigParser::peekToken() const {
-  if (current_index_ >= tokens_.size()) {
+std::string ConfigParser::_peekToken() const {
+  if (_current_index >= _tokens.size()) {
     return "";
   }
-  return tokens_[current_index_];
+  return _tokens[_current_index];
 }
 
-bool ConfigParser::hasMoreTokens() const {
-  return current_index_ < tokens_.size();
+bool ConfigParser::_hasMoreTokens() const {
+  return _current_index < _tokens.size();
 }
 
-void ConfigParser::expectToken(const std::string& expected) {
-  std::string token = nextToken();
+void ConfigParser::_expectToken(const std::string& expected) {
+  std::string token = _nextToken();
   if (token != expected) {
     throw std::runtime_error(
-        makeError("expected '" + expected + "', got '" + token + "'"));
+        _makeError("expected '" + expected + "', got '" + token + "'"));
   }
 }
 
-void ConfigParser::skipSemicolon() {
-  expectToken(";");
+void ConfigParser::_skipSemicolon() {
+  _expectToken(";");
 }
 
 // ============================================================================
 // パーサ（ブロック）
 // ============================================================================
 
-void ConfigParser::parseServerBlock(MainConfig& config) {
-  expectToken("server");
-  expectToken("{");
+void ConfigParser::_parseServerBlock(MainConfig& config) {
+  _expectToken("server");
+  _expectToken("{");
 
   ServerConfig server;
   bool has_listen = false;
 
-  while (hasMoreTokens() && peekToken() != "}") {
-    std::string directive = nextToken();
+  while (_hasMoreTokens() && _peekToken() != "}") {
+    std::string directive = _nextToken();
 
     if (directive == "listen") {
       if (has_listen) {
-        throw std::runtime_error(makeError("duplicate 'listen' directive"));
+        throw std::runtime_error(_makeError("duplicate 'listen' directive"));
       }
-      parseListenDirective(server);
+      _parseListenDirective(server);
       has_listen = true;
     } else if (directive == "server_name") {
-      parseServerNameDirective(server);
+      _parseServerNameDirective(server);
     } else if (directive == "root") {
-      parseServerRootDirective(server);
+      _parseServerRootDirective(server);
     } else if (directive == "error_page") {
-      parseErrorPageDirective(server);
+      _parseErrorPageDirective(server);
     } else if (directive == "client_max_body_size") {
-      parseClientMaxBodySizeDirective(server);
+      _parseClientMaxBodySizeDirective(server);
     } else if (directive == "location") {
-      parseLocationBlock(server);
+      _parseLocationBlock(server);
     } else {
       throw std::runtime_error(
-          makeError("unknown server directive: " + directive));
+          _makeError("unknown server directive: " + directive));
     }
   }
 
   // listenディレクティブは必須
   if (!has_listen) {
     throw std::runtime_error(
-        makeError("'listen' directive is required in server block"));
+        _makeError("'listen' directive is required in server block"));
   }
 
-  expectToken("}");
+  _expectToken("}");
   config.servers.push_back(server);
 }
 
-void ConfigParser::parseLocationBlock(ServerConfig& server) {
+void ConfigParser::_parseLocationBlock(ServerConfig& server) {
   // location パスを取得
-  std::string path = nextToken();
+  std::string path = _nextToken();
 
   // 重複locationチェック
   for (size_t i = 0; i < server.locations.size(); ++i) {
     if (server.locations[i].path == path) {
-      throw std::runtime_error(makeError("duplicate location path: " + path));
+      throw std::runtime_error(_makeError("duplicate location path: " + path));
     }
   }
 
-  expectToken("{");
+  _expectToken("{");
 
   LocationConfig location;
   location.path = path;
   bool has_return = false;
 
-  while (hasMoreTokens() && peekToken() != "}") {
-    std::string directive = nextToken();
+  while (_hasMoreTokens() && _peekToken() != "}") {
+    std::string directive = _nextToken();
 
     if (directive == "root") {
-      parseRootDirective(location);
+      _parseRootDirective(location);
     } else if (directive == "alias") {
-      parseAliasDirective(location);
+      _parseAliasDirective(location);
     } else if (directive == "index") {
-      parseIndexDirective(location);
+      _parseIndexDirective(location);
     } else if (directive == "autoindex") {
-      parseAutoindexDirective(location);
+      _parseAutoindexDirective(location);
     } else if (directive == "allowed_methods") {
-      parseAllowedMethodsDirective(location);
+      _parseAllowedMethodsDirective(location);
     } else if (directive == "upload_path") {
-      parseUploadPathDirective(location);
+      _parseUploadPathDirective(location);
     } else if (directive == "cgi_extension") {
-      parseCgiExtensionDirective(location);
+      _parseCgiExtensionDirective(location);
     } else if (directive == "cgi_path") {
-      parseCgiPathDirective(location);
+      _parseCgiPathDirective(location);
     } else if (directive == "return") {
       if (has_return) {
-        throw std::runtime_error(makeError("duplicate 'return' directive"));
+        throw std::runtime_error(_makeError("duplicate 'return' directive"));
       }
-      parseReturnDirective(location);
+      _parseReturnDirective(location);
       has_return = true;
     } else {
       throw std::runtime_error(
-          makeError("unknown location directive: " + directive));
+          _makeError("unknown location directive: " + directive));
     }
   }
 
-  expectToken("}");
+  _expectToken("}");
   server.locations.push_back(location);
 }
 
@@ -260,13 +260,13 @@ void ConfigParser::parseLocationBlock(ServerConfig& server) {
 // パーサ（server ディレクティブ）
 // ============================================================================
 
-void ConfigParser::parseListenDirective(ServerConfig& server) {
-  std::string value = nextToken();
+void ConfigParser::_parseListenDirective(ServerConfig& server) {
+  std::string value = _nextToken();
 
   // IPv6は非対応（'['を含む場合はエラー）
   if (value.find('[') != std::string::npos) {
     throw std::runtime_error(
-        makeError("IPv6 addresses are not supported: " + value));
+        _makeError("IPv6 addresses are not supported: " + value));
   }
 
   std::string port_str = value;
@@ -277,17 +277,17 @@ void ConfigParser::parseListenDirective(ServerConfig& server) {
     // コロンが複数ある場合はエラー
     if (value.find(':', colon_pos + 1) != std::string::npos) {
       throw std::runtime_error(
-          makeError("invalid listen format (multiple colons): " + value));
+          _makeError("invalid listen format (multiple colons): " + value));
     }
     // hostが空の場合はエラー
     if (colon_pos == 0) {
       throw std::runtime_error(
-          makeError("invalid listen format (empty host): " + value));
+          _makeError("invalid listen format (empty host): " + value));
     }
     // portが空の場合はエラー
     if (colon_pos == value.size() - 1) {
       throw std::runtime_error(
-          makeError("invalid listen format (empty port): " + value));
+          _makeError("invalid listen format (empty port): " + value));
     }
     server.host = value.substr(0, colon_pos);
     port_str = value.substr(colon_pos + 1);
@@ -299,17 +299,17 @@ void ConfigParser::parseListenDirective(ServerConfig& server) {
   char remaining;
   if (!(iss >> port) || iss.get(remaining) || port < PORT_MIN ||
       port > PORT_MAX) {
-    throw std::runtime_error(makeError("invalid port number: " + port_str));
+    throw std::runtime_error(_makeError("invalid port number: " + port_str));
   }
   server.listen_port = port;
 
-  skipSemicolon();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseServerNameDirective(ServerConfig& server) {
+void ConfigParser::_parseServerNameDirective(ServerConfig& server) {
   // セミコロンまで複数のサーバー名を読む
-  while (hasMoreTokens() && peekToken() != ";") {
-    std::string name = nextToken();
+  while (_hasMoreTokens() && _peekToken() != ";") {
+    std::string name = _nextToken();
     // 小文字に正規化（DNS名は大文字小文字を区別しない）
     for (size_t i = 0; i < name.length(); ++i) {
       if (name[i] >= 'A' && name[i] <= 'Z') {
@@ -322,25 +322,25 @@ void ConfigParser::parseServerNameDirective(ServerConfig& server) {
     }
     server.server_names.push_back(name);
   }
-  skipSemicolon();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseErrorPageDirective(ServerConfig& server) {
+void ConfigParser::_parseErrorPageDirective(ServerConfig& server) {
   // error_page 404 500 502 /error.html; の形式
   std::vector<int> codes;
 
   // エラーコードを集める（数字の間）
-  while (hasMoreTokens() && peekToken() != ";" && isNumber(peekToken())) {
-    std::string code_str = nextToken();
+  while (_hasMoreTokens() && _peekToken() != ";" && _isNumber(_peekToken())) {
+    std::string code_str = _nextToken();
     std::istringstream iss(code_str);
     int code;
     if (!(iss >> code)) {
-      throw std::runtime_error(makeError("invalid status code: " + code_str));
+      throw std::runtime_error(_makeError("invalid status code: " + code_str));
     }
     // ステータスコードは100-599の範囲
     if (code < STATUS_CODE_MIN || code > STATUS_CODE_MAX) {
       throw std::runtime_error(
-          makeError("invalid status code (must be 100-599): " + code_str));
+          _makeError("invalid status code (must be 100-599): " + code_str));
     }
     codes.push_back(code);
   }
@@ -348,17 +348,17 @@ void ConfigParser::parseErrorPageDirective(ServerConfig& server) {
   // コードが1つもない場合はエラー
   if (codes.empty()) {
     throw std::runtime_error(
-        makeError("error_page requires at least one status code"));
+        _makeError("error_page requires at least one status code"));
   }
 
   // パスが無い場合はエラー
-  if (peekToken() == ";") {
-    throw std::runtime_error(makeError("error_page requires a URI/path"));
+  if (_peekToken() == ";") {
+    throw std::runtime_error(_makeError("error_page requires a URI/path"));
   }
 
   // パスを取得
-  std::string path = nextToken();
-  skipSemicolon();
+  std::string path = _nextToken();
+  _skipSemicolon();
 
   // 全コードに同じパスを設定
   for (size_t i = 0; i < codes.size(); ++i) {
@@ -366,66 +366,66 @@ void ConfigParser::parseErrorPageDirective(ServerConfig& server) {
   }
 }
 
-void ConfigParser::parseClientMaxBodySizeDirective(ServerConfig& server) {
-  std::string size_str = nextToken();
-  server.client_max_body_size = parseSize(size_str);
-  skipSemicolon();
+void ConfigParser::_parseClientMaxBodySizeDirective(ServerConfig& server) {
+  std::string size_str = _nextToken();
+  server.client_max_body_size = _parseSize(size_str);
+  _skipSemicolon();
 }
 
-void ConfigParser::parseServerRootDirective(ServerConfig& server) {
-  if (peekToken() == ";") {
-    throw std::runtime_error(makeError("root directive requires a path"));
+void ConfigParser::_parseServerRootDirective(ServerConfig& server) {
+  if (_peekToken() == ";") {
+    throw std::runtime_error(_makeError("root directive requires a path"));
   }
-  server.root = nextToken();
-  skipSemicolon();
+  server.root = _nextToken();
+  _skipSemicolon();
 }
 
 // ============================================================================
 // パーサ（location ディレクティブ）
 // ============================================================================
 
-void ConfigParser::parseRootDirective(LocationConfig& location) {
-  if (peekToken() == ";") {
-    throw std::runtime_error(makeError("root directive requires a path"));
+void ConfigParser::_parseRootDirective(LocationConfig& location) {
+  if (_peekToken() == ";") {
+    throw std::runtime_error(_makeError("root directive requires a path"));
   }
-  location.root = nextToken();
-  skipSemicolon();
+  location.root = _nextToken();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseAliasDirective(LocationConfig& location) {
-  if (peekToken() == ";") {
-    throw std::runtime_error(makeError("alias directive requires a path"));
+void ConfigParser::_parseAliasDirective(LocationConfig& location) {
+  if (_peekToken() == ";") {
+    throw std::runtime_error(_makeError("alias directive requires a path"));
   }
-  location.alias = nextToken();
-  skipSemicolon();
+  location.alias = _nextToken();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseIndexDirective(LocationConfig& location) {
-  if (peekToken() == ";") {
-    throw std::runtime_error(makeError("index directive requires a filename"));
+void ConfigParser::_parseIndexDirective(LocationConfig& location) {
+  if (_peekToken() == ";") {
+    throw std::runtime_error(_makeError("index directive requires a filename"));
   }
-  location.index = nextToken();
-  skipSemicolon();
+  location.index = _nextToken();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseAutoindexDirective(LocationConfig& location) {
-  std::string value = nextToken();
+void ConfigParser::_parseAutoindexDirective(LocationConfig& location) {
+  std::string value = _nextToken();
   if (value == "on") {
     location.autoindex = true;
   } else if (value == "off") {
     location.autoindex = false;
   } else {
     throw std::runtime_error(
-        makeError("autoindex must be 'on' or 'off', got: " + value));
+        _makeError("autoindex must be 'on' or 'off', got: " + value));
   }
-  skipSemicolon();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseAllowedMethodsDirective(LocationConfig& location) {
+void ConfigParser::_parseAllowedMethodsDirective(LocationConfig& location) {
   location.allow_methods.clear();
 
-  while (hasMoreTokens() && peekToken() != ";") {
-    std::string method = nextToken();
+  while (_hasMoreTokens() && _peekToken() != ";") {
+    std::string method = _nextToken();
     HttpMethod m;
     if (method == "GET") {
       m = GET;
@@ -434,7 +434,7 @@ void ConfigParser::parseAllowedMethodsDirective(LocationConfig& location) {
     } else if (method == "DELETE") {
       m = DELETE;
     } else {
-      throw std::runtime_error(makeError("unknown HTTP method: " + method));
+      throw std::runtime_error(_makeError("unknown HTTP method: " + method));
     }
     // 重複チェック（重複は除外）
     bool exists = false;
@@ -448,52 +448,52 @@ void ConfigParser::parseAllowedMethodsDirective(LocationConfig& location) {
       location.allow_methods.push_back(m);
     }
   }
-  skipSemicolon();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseUploadPathDirective(LocationConfig& location) {
-  if (peekToken() == ";") {
+void ConfigParser::_parseUploadPathDirective(LocationConfig& location) {
+  if (_peekToken() == ";") {
     throw std::runtime_error(
-        makeError("upload_path directive requires a path"));
+        _makeError("upload_path directive requires a path"));
   }
-  location.upload_path = nextToken();
-  skipSemicolon();
+  location.upload_path = _nextToken();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseCgiExtensionDirective(LocationConfig& location) {
-  if (peekToken() == ";") {
+void ConfigParser::_parseCgiExtensionDirective(LocationConfig& location) {
+  if (_peekToken() == ";") {
     throw std::runtime_error(
-        makeError("cgi_extension directive requires an extension"));
+        _makeError("cgi_extension directive requires an extension"));
   }
-  location.cgi_extension = nextToken();
-  skipSemicolon();
+  location.cgi_extension = _nextToken();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseCgiPathDirective(LocationConfig& location) {
-  if (peekToken() == ";") {
-    throw std::runtime_error(makeError("cgi_path directive requires a path"));
+void ConfigParser::_parseCgiPathDirective(LocationConfig& location) {
+  if (_peekToken() == ";") {
+    throw std::runtime_error(_makeError("cgi_path directive requires a path"));
   }
-  location.cgi_path = nextToken();
-  skipSemicolon();
+  location.cgi_path = _nextToken();
+  _skipSemicolon();
 }
 
-void ConfigParser::parseReturnDirective(LocationConfig& location) {
+void ConfigParser::_parseReturnDirective(LocationConfig& location) {
   // return 301 http://example.com; 形式
-  std::string code_str = nextToken();
+  std::string code_str = _nextToken();
   std::istringstream iss(code_str);
   int code;
   if (!(iss >> code)) {
     throw std::runtime_error(
-        makeError("invalid return status code: " + code_str));
+        _makeError("invalid return status code: " + code_str));
   }
   // リダイレクトステータスは300-399の範囲
   if (code < REDIRECT_CODE_MIN || code > REDIRECT_CODE_MAX) {
     throw std::runtime_error(
-        makeError("return status code must be 300-399, got: " + code_str));
+        _makeError("return status code must be 300-399, got: " + code_str));
   }
 
-  std::string url = nextToken();
-  skipSemicolon();
+  std::string url = _nextToken();
+  _skipSemicolon();
 
   location.return_redirect = std::make_pair(code, url);
 }
@@ -502,9 +502,9 @@ void ConfigParser::parseReturnDirective(LocationConfig& location) {
 // ユーティリティ
 // ============================================================================
 
-size_t ConfigParser::parseSize(const std::string& size_str) const {
+size_t ConfigParser::_parseSize(const std::string& size_str) const {
   if (size_str.empty()) {
-    throw std::runtime_error(makeError("empty size string"));
+    throw std::runtime_error(_makeError("empty size string"));
   }
 
   size_t multiplier = 1;
@@ -525,19 +525,19 @@ size_t ConfigParser::parseSize(const std::string& size_str) const {
   std::istringstream iss(num_str);
   size_t value;
   if (!(iss >> value)) {
-    throw std::runtime_error(makeError("invalid size: " + size_str));
+    throw std::runtime_error(_makeError("invalid size: " + size_str));
   }
 
   // オーバーフローチェック
   size_t max_value = static_cast<size_t>(-1);
   if (value > max_value / multiplier) {
-    throw std::runtime_error(makeError("size overflow: " + size_str));
+    throw std::runtime_error(_makeError("size overflow: " + size_str));
   }
 
   return value * multiplier;
 }
 
-bool ConfigParser::isNumber(const std::string& str) const {
+bool ConfigParser::_isNumber(const std::string& str) const {
   if (str.empty()) {
     return false;
   }
@@ -549,8 +549,8 @@ bool ConfigParser::isNumber(const std::string& str) const {
   return true;
 }
 
-std::string ConfigParser::makeError(const std::string& message) const {
+std::string ConfigParser::_makeError(const std::string& message) const {
   std::ostringstream oss;
-  oss << file_path_ << ":" << last_line_ << ": " << message;
+  oss << _file_path << ":" << _last_line << ": " << message;
   return oss.str();
 }
