@@ -113,7 +113,7 @@ class HttpResponse {
     RES_BODY,
     RES_FINISH,
     RES_DONE,
-    RES_ERROR,
+    RES_ERROR
   } _state;
 
   int _statusCode;
