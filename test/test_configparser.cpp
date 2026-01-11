@@ -170,6 +170,30 @@ void test_parse_client_max_body_size() {
   PASS();
 }
 
+void test_body_size_with_trailing_chars() {
+  TEST("client_max_body_size with trailing characters throws error");
+
+  const char* test_conf = "/tmp/test_bodysize_trailing.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 8080;\n";
+  file << "    client_max_body_size 10Mxyz;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  try {
+    parser.parse(config);
+    FAIL("should throw on trailing characters");
+  } catch (const std::runtime_error& e) {
+    std::string msg(e.what());
+    ASSERT_TRUE(msg.find("invalid size") != std::string::npos);
+  }
+
+  PASS();
+}
+
 void test_parse_cgi() {
   TEST("parse cgi directives");
 
@@ -813,6 +837,7 @@ int main() {
   test_parse_allowed_methods();
   test_parse_error_page();
   test_parse_client_max_body_size();
+  test_body_size_with_trailing_chars();
   test_parse_cgi();
   test_parse_return();
   test_parse_comment();

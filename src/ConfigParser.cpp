@@ -529,7 +529,10 @@ size_t ConfigParser::_parseSize(const std::string& size_str) const {
 
   std::istringstream iss(num_str);
   size_t value;
-  if (!(iss >> value)) {
+  char remaining;
+
+  // 数値としてパース可能で、余分な文字がないかチェック
+  if (!(iss >> value) || iss.get(remaining)) {
     throw std::runtime_error(_makeError("invalid size: " + size_str));
   }
 
