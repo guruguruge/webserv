@@ -135,6 +135,14 @@ class ConfigParser {
   void _parseListenDirective(ServerConfig& server);
 
   /**
+   * @brief 文字列がポート番号として有効かチェック
+   * @param str 判定する文字列
+   * @param port 出力用ポート番号
+   * @return 有効なポート番号ならtrue
+   */
+  bool _tryParsePort(const std::string& str, int& port) const;
+
+  /**
    * @brief server_nameディレクティブをパース
    * @param server パース結果を格納するServerConfig
    */

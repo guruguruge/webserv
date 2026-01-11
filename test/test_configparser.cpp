@@ -678,7 +678,8 @@ void test_listen_empty_port() {
     FAIL("should throw on empty port");
   } catch (const std::runtime_error& e) {
     std::string msg(e.what());
-    ASSERT_TRUE(msg.find("empty port") != std::string::npos);
+    // エラーメッセージが "empty host or port" に変更された
+    ASSERT_TRUE(msg.find("empty") != std::string::npos);
   }
 
   PASS();
@@ -711,12 +712,12 @@ void test_error_page_requires_path() {
 
 // Test: listen with trailing characters throws error
 void test_listen_trailing_chars() {
-  TEST("listen with trailing characters throws error");
+  TEST("listen with invalid port (trailing chars) throws error");
 
   const char* test_conf = "/tmp/test_listen_trailing.conf";
   std::ofstream file(test_conf);
   file << "server {\n";
-  file << "    listen 8080abc;\n";
+  file << "    listen 127.0.0.1:8080abc;\n";  // host:port の場合でportが不正
   file << "}\n";
   file.close();
 
@@ -724,11 +725,74 @@ void test_listen_trailing_chars() {
   ConfigParser parser(test_conf);
   try {
     parser.parse(config);
-    FAIL("should throw on trailing characters");
+    FAIL("should throw on trailing characters in port");
   } catch (const std::runtime_error& e) {
     std::string msg(e.what());
     ASSERT_TRUE(msg.find("invalid port number") != std::string::npos);
   }
+
+  PASS();
+}
+
+// Test: listen with host only (default port 80)
+void test_listen_host_only() {
+  TEST("parse listen with host only (default port 80)");
+
+  const char* test_conf = "/tmp/test_listen_host.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 192.0.2.1;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  parser.parse(config);
+
+  ASSERT_EQ("192.0.2.1", config.servers[0].host);
+  ASSERT_EQ(80, config.servers[0].listen_port);
+
+  PASS();
+}
+
+// Test: listen with localhost only (default port 80)
+void test_listen_localhost_only() {
+  TEST("parse listen with localhost only (default port 80)");
+
+  const char* test_conf = "/tmp/test_listen_localhost.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen localhost;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  parser.parse(config);
+
+  ASSERT_EQ("localhost", config.servers[0].host);
+  ASSERT_EQ(80, config.servers[0].listen_port);
+
+  PASS();
+}
+
+// Test: listen with port only (no host)
+void test_listen_port_only() {
+  TEST("parse listen with port only (no host)");
+
+  const char* test_conf = "/tmp/test_listen_port.conf";
+  std::ofstream file(test_conf);
+  file << "server {\n";
+  file << "    listen 3000;\n";
+  file << "}\n";
+  file.close();
+
+  MainConfig config;
+  ConfigParser parser(test_conf);
+  parser.parse(config);
+
+  ASSERT_EQ("0.0.0.0", config.servers[0].host);
+  ASSERT_EQ(3000, config.servers[0].listen_port);
 
   PASS();
 }
@@ -771,6 +835,9 @@ int main() {
   test_listen_empty_port();
   test_error_page_requires_path();
   test_listen_trailing_chars();
+  test_listen_host_only();
+  test_listen_localhost_only();
+  test_listen_port_only();
 
   std::cout << std::endl;
   std::cout << "========================================" << std::endl;

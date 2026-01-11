@@ -269,39 +269,44 @@ void ConfigParser::_parseListenDirective(ServerConfig& server) {
         _makeError("IPv6 addresses are not supported: " + value));
   }
 
-  std::string port_str = value;
+  size_t colon_pos = value.find(':');
 
   // host:port 形式の場合
-  size_t colon_pos = value.find(':');
   if (colon_pos != std::string::npos) {
     // コロンが複数ある場合はエラー
     if (value.find(':', colon_pos + 1) != std::string::npos) {
       throw std::runtime_error(
           _makeError("invalid listen format (multiple colons): " + value));
     }
-    // hostが空の場合はエラー
-    if (colon_pos == 0) {
+    // hostまたはportが空の場合はエラー
+    if (colon_pos == 0 || colon_pos == value.size() - 1) {
       throw std::runtime_error(
-          _makeError("invalid listen format (empty host): " + value));
+          _makeError("invalid listen format (empty host or port): " + value));
     }
-    // portが空の場合はエラー
-    if (colon_pos == value.size() - 1) {
-      throw std::runtime_error(
-          _makeError("invalid listen format (empty port): " + value));
-    }
-    server.host = value.substr(0, colon_pos);
-    port_str = value.substr(colon_pos + 1);
-  }
 
-  // ポート番号を数値に変換
-  std::istringstream iss(port_str);
-  int port;
-  char remaining;
-  if (!(iss >> port) || iss.get(remaining) || port < PORT_MIN ||
-      port > PORT_MAX) {
-    throw std::runtime_error(_makeError("invalid port number: " + port_str));
+    server.host = value.substr(0, colon_pos);
+    std::string port_str = value.substr(colon_pos + 1);
+
+    int port;
+    if (!_tryParsePort(port_str, port)) {
+      throw std::runtime_error(_makeError("invalid port number: " + port_str));
+    }
+    server.listen_port = port;
   }
-  server.listen_port = port;
+  // コロンがない場合: port のみ or host のみ
+  else {
+    int port;
+    // 数値のみ → ポート番号として扱う (例: "8080")
+    if (_tryParsePort(value, port)) {
+      server.listen_port = port;
+    }
+    // 数値でない → ホスト名として扱う (例: "localhost", "192.0.2.1")
+    // デフォルトポート80を使用
+    else {
+      server.host = value;
+      server.listen_port = 80;
+    }
+  }
 
   _skipSemicolon();
 }
@@ -535,6 +540,22 @@ size_t ConfigParser::_parseSize(const std::string& size_str) const {
   }
 
   return value * multiplier;
+}
+
+bool ConfigParser::_tryParsePort(const std::string& str, int& port) const {
+  if (str.empty()) {
+    return false;
+  }
+
+  std::istringstream iss(str);
+  char remaining;
+
+  // 数値としてパース可能で、余分な文字がなく、範囲内かチェック
+  if ((iss >> port) && !iss.get(remaining) && port >= PORT_MIN &&
+      port <= PORT_MAX) {
+    return true;
+  }
+  return false;
 }
 
 bool ConfigParser::_isNumber(const std::string& str) const {
