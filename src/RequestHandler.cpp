@@ -818,6 +818,7 @@ int RequestHandler::_handleCgi(Client* client, const std::string& scriptPath,
     }
 
     std::cerr << "[Error] execve failed: " << strerror(errno) << std::endl;
+    freeCgiEnv(env);
     exit(1);
   }
 
