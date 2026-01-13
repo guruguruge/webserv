@@ -95,6 +95,7 @@ class HttpRequest {
   HttpMethod getMethod() const;
   std::string getPath() const;
   std::string getHeader(const std::string& key) const;
+  const std::map<std::string, std::string>& getHeaders() const;
   const std::vector<char>& getBody() const;
   size_t getContentLength() const;
   std::string getQuery() const;
