@@ -387,14 +387,42 @@ int removeFile(const std::string& path) {
   return 500;    // Internal Error
 }
 
-char** createCgiEnv(const HttpRequest& req, const std::string& realPath,
+std::string toEnvKey(const std::string& headerKey) {
+  std::string result = headerKey;
+  for (std::string::iterator it = result.begin(); it != result.end(); ++it) {
+    if (*it == '-') {
+      *it = '_';
+    } else {
+      *it = std::toupper(static_cast<unsigned char>(*it));
+    }
+  }
+  return result;
+}
+
+char** createCgiEnv(const Client* client, const std::string& realPath,
                     const LocationConfig* location) {
   (void)location;
+  const HttpRequest& req = client->req;
   std::map<std::string, std::string> env;
 
-  env["SERVER_SOFTWARE"] = "webserv/1.0";
-  env["SERVER_PROTOCOL"] = "HTTP/1.1";
+  std::string contentLength = req.getHeader("Content-Length");
+  if (!contentLength.empty()) {
+    env["CONTENT_LENGTH"] = contentLength;
+  }
+  std::string contentType = req.getHeader("Content-Type");
+  if (!contentType.empty()) {
+    env["CONTENT_TYPE"] = contentType;
+  }
+
   env["GATEWAY_INTERFACE"] = "CGI/1.1";
+
+  env["PATH_INFO"] = req.getPath();
+  env["PATH_TRANSLATED"] = realPath;
+
+  env["QUERY_STRING"] = req.getQuery();
+
+  env["REMOTE_ADDR"] = client->getIp();
+
   HttpMethod method = req.getMethod();
   switch (method) {
     case GET:
@@ -410,19 +438,30 @@ char** createCgiEnv(const HttpRequest& req, const std::string& realPath,
       env["REQUEST_METHOD"] = "UNKNOWN";
       break;
   }
+
   env["SCRIPT_NAME"] = req.getPath();
   env["SCRIPT_FILENAME"] = realPath;
-  env["PATH_INFO"] = req.getPath();
-  env["PATH_TRANSLATED"] = realPath;
-  env["QUERY_STRING"] = req.getQuery();
 
-  std::string contentType = req.getHeader("Content-Type");
-  if (!contentType.empty()) {
-    env["CONTENT_TYPE"] = contentType;
+  std::string serverName = req.getHeader("Host");
+  if (serverName.empty()) {
+    client->getIp();
+  } else {
+    size_t colonPos = serverName.find(":");
+    if (colonPos != std::string::npos)
+      serverName = serverName.substr(0, colonPos);
   }
-  std::string contentLength = req.getHeader("Content-Length");
-  if (!contentLength.empty()) {
-    env["CONTENT_LENGTH"] = contentLength;
+  env["SERVER_NAME"] = serverName;
+  env["SERVER_PORT"] = toString(client->getListenPort());
+  env["SERVER_PROTOCOL"] = "HTTP/1.1";
+  env["SERVER_SOFTWARE"] = "webserv/1.0";
+
+  const std::map<std::string, std::string>& headers = req.getHeaders();
+  for (std::map<std::string, std::string>::const_iterator it = headers.begin();
+       it != headers.end(); ++it) {
+    std::string key = toEnvKey(it->first);
+    if (key == "CONTENT_LENGTH" || key == "CONTENT_TYPE")
+      continue;
+    env["HTTP_" + key] = it->second;
   }
 
   char** envp = NULL;
@@ -449,6 +488,15 @@ char** createCgiEnv(const HttpRequest& req, const std::string& realPath,
     return NULL;
   }
   return envp;
+}
+
+void freeCgiEnv(char** envp) {
+  if (!envp)
+    return;
+  for (size_t i = 0; envp[i] != NULL; ++i) {
+    delete[] envp[i];
+  }
+  delete[] envp;
 }
 
 }  // namespace
@@ -750,7 +798,7 @@ int RequestHandler::_handleCgi(Client* client, const std::string& scriptPath,
     close(pipe_out[0]);
     close(pipe_out[1]);
 
-    char** env = createCgiEnv(client->req, scriptPath, location);
+    char** env = createCgiEnv(client, scriptPath, location);
 
     if (!env) {
       std::cerr << "[Error] Failed to create CGI environment" << std::endl;
