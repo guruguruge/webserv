@@ -444,7 +444,7 @@ char** createCgiEnv(const Client* client, const std::string& realPath,
 
   std::string serverName = req.getHeader("Host");
   if (serverName.empty()) {
-    client->getIp();
+    serverName = client->getIp();
   } else {
     size_t colonPos = serverName.find(":");
     if (colonPos != std::string::npos)
@@ -784,7 +784,7 @@ int RequestHandler::_handleCgi(Client* client, const std::string& scriptPath,
       close(pipe_out[1]);
       exit(1);
     }
-    if (dup2(pipe_out[1], STDOUT_FILENO)) {
+    if (dup2(pipe_out[1], STDOUT_FILENO) < 0) {
       std::cerr << "[Error] dup2 stdout failed: " << strerror(errno)
                 << std::endl;
       close(pipe_in[0]);
