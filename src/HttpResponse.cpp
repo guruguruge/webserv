@@ -14,7 +14,7 @@ std::string toLower(const std::string& str) {
 bool stringToInt(const std::string& str, int& val) {
   std::istringstream iss(str);
   iss >> val;
-  return (iss.fail());
+  return (!iss.fail());
 }
 
 std::string trim(const std::string& str) {
@@ -30,8 +30,8 @@ bool parseHeaderLine(const std::string& line, std::string& key,
   std::string::size_type colonPos = line.find(':');
   if (colonPos == std::string::npos)
     return false;
-  key = line.substr(0, colonPos);
-  val = line.substr(colonPos + 1);
+  key = trim(line.substr(0, colonPos));
+  val = trim(line.substr(colonPos + 1));
   return true;
 }
 
