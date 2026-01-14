@@ -14,11 +14,170 @@
 #include "../inc/Client.hpp"
 #include <sys/epoll.h>
 #include <sys/wait.h>
+#include <csignal>
 #include <cstring>
 #include <ctime>
 #include <iostream>
 #include "../inc/EpollContext.hpp"
 #include "../inc/EpollUtils.hpp"
+
+namespace {
+
+// Converts a value to a string using stringstream.
+// This is a C++98 compatible alternative to std::to_string.
+//
+// Args:
+//   value: The value to convert.
+//
+// Returns:
+//   The string representation of the value.
+template <typename T>
+std::string toString(const T& value) {
+  std::ostringstream oss;
+  oss << value;
+  if (oss.fail()) {
+    return "";
+  }
+  return oss.str();
+}
+
+std::string toEnvKey(const std::string& headerKey) {
+  std::string result = headerKey;
+  for (std::string::iterator it = result.begin(); it != result.end(); ++it) {
+    if (*it == '-') {
+      *it = '_';
+    } else {
+      *it = std::toupper(static_cast<unsigned char>(*it));
+    }
+  }
+  return result;
+}
+
+char** createCgiEnv(const Client& client, const std::string& realPath) {
+  const HttpRequest& req = client.req;
+  std::map<std::string, std::string> env;
+
+  std::string contentLength = req.getHeader("Content-Length");
+  if (!contentLength.empty()) {
+    env["CONTENT_LENGTH"] = contentLength;
+  }
+  std::string contentType = req.getHeader("Content-Type");
+  if (!contentType.empty()) {
+    env["CONTENT_TYPE"] = contentType;
+  }
+
+  env["GATEWAY_INTERFACE"] = "CGI/1.1";
+
+  env["PATH_INFO"] = req.getPath();
+  env["PATH_TRANSLATED"] = realPath;
+
+  env["QUERY_STRING"] = req.getQuery();
+
+  env["REMOTE_ADDR"] = client.getIp();
+
+  HttpMethod method = req.getMethod();
+  switch (method) {
+    case GET:
+      env["REQUEST_METHOD"] = "GET";
+      break;
+    case POST:
+      env["REQUEST_METHOD"] = "POST";
+      break;
+    case DELETE:
+      env["REQUEST_METHOD"] = "DELETE";
+      break;
+    default:
+      env["REQUEST_METHOD"] = "UNKNOWN";
+      break;
+  }
+
+  env["SCRIPT_NAME"] = req.getPath();
+  env["SCRIPT_FILENAME"] = realPath;
+
+  std::string serverName = req.getHeader("Host");
+  if (serverName.empty()) {
+    serverName = client.getIp();
+  } else {
+    size_t colonPos = serverName.find(":");
+    if (colonPos != std::string::npos)
+      serverName = serverName.substr(0, colonPos);
+  }
+  env["SERVER_NAME"] = serverName;
+  env["SERVER_PORT"] = toString(client.getListenPort());
+  env["SERVER_PROTOCOL"] = "HTTP/1.1";
+  env["SERVER_SOFTWARE"] = "webserv/1.0";
+
+  const std::map<std::string, std::string>& headers = req.getHeaders();
+  for (std::map<std::string, std::string>::const_iterator it = headers.begin();
+       it != headers.end(); ++it) {
+    std::string key = toEnvKey(it->first);
+    if (key == "CONTENT_LENGTH" || key == "CONTENT_TYPE")
+      continue;
+    env["HTTP_" + key] = it->second;
+  }
+
+  char** envp = NULL;
+  try {
+    envp = new char*[env.size() + 1];
+    for (size_t i = 0; i <= env.size(); ++i)
+      envp[i] = NULL;
+    size_t k = 0;
+    for (std::map<std::string, std::string>::const_iterator it = env.begin();
+         it != env.end(); ++it, ++k) {
+      std::string s = it->first + "=" + it->second;
+      envp[k] = new char[s.size() + 1];
+      std::copy(s.begin(), s.end(), envp[k]);
+      envp[k][s.size()] = '\0';
+    }
+  } catch (const std::bad_alloc& e) {
+    std::cerr << "[Error] createCgiEnv: memory allocation failed: " << e.what()
+              << std::endl;
+    if (envp) {
+      for (size_t i = 0; envp[i] != NULL; ++i)
+        delete[] envp[i];
+      delete[] envp;
+    }
+    return NULL;
+  }
+  return envp;
+}
+
+void freeCgiEnv(char** envp) {
+  if (!envp)
+    return;
+  for (size_t i = 0; envp[i] != NULL; ++i) {
+    delete[] envp[i];
+  }
+  delete[] envp;
+}
+
+bool setNonBlocking(int fd) {
+  if (fd < 0)
+    return false;
+
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags == -1)
+    return false;
+
+  if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    return false;
+  return true;
+}
+
+bool setCloseOnExec(int fd) {
+  if (fd < 0)
+    return false;
+
+  int flags = fcntl(fd, F_GETFD);
+  if (flags == -1)
+    return false;
+
+  if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1)
+    return false;
+  return true;
+}
+
+}  // namespace
 
 // ========================================
 // コンストラクタ / デストラクタ
@@ -98,26 +257,146 @@ void Client::readyToWrite() {
 
 void Client::readyToRead() {
   _state = READING_REQUEST;
+  req.clear();
+  res.clear();
   if (_epoll && _context) {
     _epoll->mod(_fd, _context, EPOLLIN);
   }
 }
 
-void Client::startCgi(const std::string& scriptPath) {
-  (void)scriptPath;  // TODO: 実際の CGI 実行ロジック
-  _state = WAITING_CGI;
-  _cgi_stdin_offset = 0;  // オフセットをリセット
-  // CGI パイプの epoll 登録は RequestHandler 内で行われる
+void Client::readyToCgiWrite() {
+  _state = WAITING_CGI_INPUT;
+  if (_epoll && _context && _cgi_stdin_fd != -1) {
+    _epoll->add(_cgi_stdin_fd, _context, EPOLLOUT);
+  }
+}
+
+void Client::readyToCgiRead() {
+  _state = READING_CGI_OUTPUT;
+
+  if (_cgi_stdin_fd != -1) {
+    if (_epoll)
+      _epoll->del(_cgi_stdin_fd);
+    close(_cgi_stdin_fd);
+    _cgi_stdin_fd = -1;
+  }
+
+  if (_epoll && _context && _cgi_stdout_fd != -1) {
+    _epoll->add(_cgi_stdout_fd, _context, EPOLLIN);
+  }
+}
+
+int Client::startCgi(const std::string& scriptPath,
+                     const std::string& execPath) {
+  int pipe_in[2];
+  int pipe_out[2];
+
+  if (pipe(pipe_in) < 0) {
+    std::cerr << "[Error] pipe creation failed: " << strerror(errno)
+              << std::endl;
+    return 500;  // internal server error
+  }
+  if (pipe(pipe_out) < 0) {
+    close(pipe_in[0]);
+    close(pipe_in[1]);
+    std::cerr << "[Error] pipe creation failed: " << strerror(errno)
+              << std::endl;
+    return 500;  // internal server error
+  }
+
+  setCloseOnExec(pipe_in[0]);
+  setCloseOnExec(pipe_in[1]);
+  setCloseOnExec(pipe_out[0]);
+  setCloseOnExec(pipe_out[1]);
+
+  _cgi_pid = fork();
+  if (_cgi_pid < 0) {
+    std::cerr << "[Error] fork failed: " << strerror(errno) << std::endl;
+    close(pipe_in[0]);
+    close(pipe_in[1]);
+    close(pipe_out[0]);
+    close(pipe_out[1]);
+    return 500;  // internal server error
+  }
+
+  if (_cgi_pid == 0) {
+    close(_fd);
+    if (dup2(pipe_in[0], STDIN_FILENO) < 0) {
+      std::cerr << "[Error] dup2 stdin failed: " << strerror(errno)
+                << std::endl;
+      close(pipe_in[0]);
+      close(pipe_in[1]);
+      close(pipe_out[0]);
+      close(pipe_out[1]);
+      exit(1);
+    }
+    if (dup2(pipe_out[1], STDOUT_FILENO) < 0) {
+      std::cerr << "[Error] dup2 stdout failed: " << strerror(errno)
+                << std::endl;
+      close(pipe_in[0]);
+      close(pipe_in[1]);
+      close(pipe_out[0]);
+      close(pipe_out[1]);
+      exit(1);
+    }
+    close(pipe_in[0]);
+    close(pipe_in[1]);
+    close(pipe_out[0]);
+    close(pipe_out[1]);
+
+    char** env = createCgiEnv(*this, scriptPath);
+    if (!env) {
+      std::cerr << "[Error] Failed to create CGI environment" << std::endl;
+      exit(1);
+    }
+
+    char* argv[3];
+    if (!execPath.empty()) {
+      argv[0] = const_cast<char*>(execPath.c_str());
+      argv[1] = const_cast<char*>(scriptPath.c_str());
+      argv[2] = NULL;
+      execve(execPath.c_str(), argv, env);
+    } else {
+      argv[0] = const_cast<char*>(scriptPath.c_str());
+      argv[1] = NULL;
+      execve(scriptPath.c_str(), argv, env);
+    }
+
+    std::cerr << "[Error] execve failed: " << strerror(errno) << std::endl;
+    freeCgiEnv(env);
+    exit(1);
+  }
+
+  close(pipe_in[0]);
+  close(pipe_out[1]);
+
+  _cgi_stdin_fd = pipe_in[1];
+  _cgi_stdout_fd = pipe_out[0];
+
+  if (!setNonBlocking(_cgi_stdin_fd) || !setNonBlocking(_cgi_stdout_fd)) {
+    std::cerr << "[Error] setNonBlocking failed: " << strerror(errno)
+              << std::endl;
+    _cleanupCgi();
+    return 500;  // internal server error
+  }
+
+  _cgi_stdin_offset = 0;
+  _cgi_output.clear();
+
+  if (req.getMethod() == POST) {
+    readyToCgiWrite();
+  } else {
+    close(_cgi_stdin_fd);
+    _cgi_stdin_fd = -1;
+    readyToCgiRead();
+  }
+  return (0);
 }
 
 void Client::finishCgi() {
-  // CGI 出力を使ってレスポンスを構築
-  // (実際のパース処理は RequestHandler で行う想定)
-  _state = WRITING_RESPONSE;
-  if (_epoll && _context) {
-    _epoll->mod(_fd, _context, EPOLLOUT);
-  }
+  res.parseCgiResponse(_cgi_output);
   _cleanupCgi();
+  readyToWrite();
 }
 
 void Client::markClose() {
@@ -188,12 +467,8 @@ EpollContext* Client::getContext() const {
 void Client::reset() {
   req.clear();
   res.clear();
-  _state = READING_REQUEST;
-  _cgi_pid = -1;
-  _cgi_stdout_fd = -1;
-  _cgi_stdin_fd = -1;
-  _cgi_output.clear();
-  _cgi_stdin_offset = 0;
+  _cleanupCgi();
+  _state = WAIT_REQUEST;
   updateTimestamp();
 }
 
@@ -202,18 +477,24 @@ void Client::reset() {
 // ========================================
 
 void Client::_cleanupCgi() {
-  if (_cgi_stdout_fd >= 0) {
+  if (_cgi_stdout_fd != -1) {
+    if (_epoll)
+      _epoll->del(_cgi_stdout_fd);
     close(_cgi_stdout_fd);
     _cgi_stdout_fd = -1;
   }
-  if (_cgi_stdin_fd >= 0) {
+  if (_cgi_stdin_fd != -1) {
+    if (_epoll)
+      _epoll->del(_cgi_stdin_fd);
     close(_cgi_stdin_fd);
     _cgi_stdin_fd = -1;
   }
   if (_cgi_pid > 0) {
-    // 子プロセスを待つ (ゾンビ回避)
-    int status;
-    waitpid(_cgi_pid, &status, WNOHANG);
+    int ret = waitpid(_cgi_pid, NULL, WNOHANG);
+    if (ret == 0) {
+      kill(_cgi_pid, SIGTERM);
+      waitpid(_cgi_pid, NULL, 0);
+    }
     _cgi_pid = -1;
   }
   _cgi_output.clear();

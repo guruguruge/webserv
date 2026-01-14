@@ -1,6 +1,8 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
+#include <fcntl.h>      // fcntl
+#include <stdlib.h>     // exit
 #include <sys/types.h>  // pid_t
 #include <unistd.h>     // close
 #include <ctime>
@@ -24,7 +26,6 @@ struct EpollContext;
  */
 class Client {
  public:
-  // 公開メンバとしてRequest/Responseを持つ（アクセスのしやすさ重視）
   HttpRequest req;
   HttpResponse res;
 
@@ -49,9 +50,13 @@ class Client {
 
   void readyToWrite();  // WRITING_RESPONSE へ遷移 + EPOLLOUT 設定
   void readyToRead();   // リクエスト待ちへ遷移 + EPOLLIN 設定 (Keep-Alive)
-  void startCgi(const std::string& scriptPath);  // CGI 実行開始
-  void finishCgi();                              // CGI 完了処理
-  void markClose();                              // 接続終了マーク
+  int startCgi(const std::string& scriptPath,
+               const std::string& execPath);  // CGI 実行開始
+  void readyToCgiWrite();  // POST: stdinパイプへの書き込み準備 (EPOLLOUT)
+  void readyToCgiRead();   // GET/POST: stdoutパイプからの読み込み準備 (EPOLLIN)
+
+  void finishCgi();  // CGI 完了処理
+  void markClose();  // 接続終了マーク
 
   // --- CGI 情報アクセス (main.cpp から使用) ---
   pid_t getCgiPid() const;

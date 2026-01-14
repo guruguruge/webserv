@@ -1,6 +1,42 @@
 #include <algorithm>
 #include "../inc/Http.hpp"
 
+namespace {
+
+std::string toLower(const std::string& str) {
+  std::string result = str;
+  for (std::string::iterator it = result.begin(); it != result.end(); ++it) {
+    *it = static_cast<char>(std::tolower(static_cast<unsigned char>(*it)));
+  }
+  return result;
+}
+
+bool stringToInt(const std::string& str, int& val) {
+  std::istringstream iss(str);
+  iss >> val;
+  return (!iss.fail());
+}
+
+std::string trim(const std::string& str) {
+  std::string::size_type first = str.find_first_not_of(" \t");
+  if (first == std::string::npos)
+    return "";
+  std::string::size_type last = str.find_last_not_of(" \t");
+  return str.substr(first, last - first + 1);
+}
+
+bool parseHeaderLine(const std::string& line, std::string& key,
+                     std::string& val) {
+  std::string::size_type colonPos = line.find(':');
+  if (colonPos == std::string::npos)
+    return false;
+  key = trim(line.substr(0, colonPos));
+  val = trim(line.substr(colonPos + 1));
+  return true;
+}
+
+}  // namespace
+
 std::string HttpResponse::getMimeType(const std::string& filepath) {
   static std::map<std::string, std::string> mimeTypes;
   if (mimeTypes.empty()) {
@@ -204,6 +240,60 @@ void HttpResponse::setChunked(bool isChunked) {
 
 void HttpResponse::setRequestMethod(HttpMethod method) {
   this->_requestMethod = method;
+}
+
+void HttpResponse::parseCgiResponse(const std::string& output) {
+  if (output.empty()) {
+    setStatusCode(502);  // Bad gateway
+    setBody("CGI Error: Empty response received");
+    return;
+  }
+
+  setStatusCode(200);
+
+  std::string buffer = output;
+  std::string body;
+
+  while (true) {
+    std::string::size_type eolPos = buffer.find("\r\n");
+    std::string::size_type eolSize = 2;
+    if (eolPos == std::string::npos) {
+      eolPos = buffer.find("\n");
+      eolSize = 1;
+    }
+
+    if (eolPos == std::string::npos) {
+      body = buffer;
+      break;
+    }
+
+    if (eolPos == 0) {
+      buffer.erase(0, eolSize);
+      body = buffer;
+      break;
+    }
+    std::string line = buffer.substr(0, eolPos);
+    buffer.erase(0, eolPos + eolSize);
+
+    std::string key, val;
+    if (!parseHeaderLine(line, key, val))
+      continue;
+
+    std::string keyLower = toLower(key);
+    if (keyLower == "status") {
+      int code;
+      if (stringToInt(val, code) && code > 0) {
+        setStatusCode(code);
+      } else {
+        setStatusCode(502);  // Bad gateway
+        setBody("CGI Error: Invalid Status header format");
+        return;
+      }
+    } else {
+      setHeader(keyLower, val);
+    }
+  }
+  setBody(body);
 }
 
 void HttpResponse::makeErrorResponse(int code, const ServerConfig* config) {

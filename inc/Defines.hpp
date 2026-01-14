@@ -15,11 +15,12 @@ enum HttpMethod { GET, POST, DELETE, UNKNOWN_METHOD };
 
 // クライアントの状態遷移（epollのイベント分岐に使用）
 enum ConnState {
-  WAIT_REQUEST,      // 接続直後 or Keep-Alive後のリクエスト待ち
-  READING_REQUEST,   // 受信中 & パース中
-  PROCESSING,        // 静的ファイルの準備など、すぐに終わる処理
-  WAITING_CGI,       // CGIプロセスからの出力待ち（パイプ監視）
-  WRITING_RESPONSE,  // レスポンス送信中
+  WAIT_REQUEST,        // 接続直後 or Keep-Alive後のリクエスト待ち
+  READING_REQUEST,     // 受信中 & パース中
+  PROCESSING,          // 静的ファイルの準備など、すぐに終わる処理
+  WAITING_CGI_INPUT,   // POST: リクエストボディをCGIへ書き込み中
+  READING_CGI_OUTPUT,  // GET/POST: CGIからの出力を読み込み中
+  WRITING_RESPONSE,    // レスポンス送信中
   KEEP_ALIVE,  // ※これはステートというより、WRITING完了後の「分岐フラグ」に近いかも
   CLOSE_CONNECTION  // 同上
 };

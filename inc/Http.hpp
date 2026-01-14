@@ -152,6 +152,8 @@ class HttpResponse {
   // 将来HEADに対応する場合に必要になるので一応
   void setRequestMethod(HttpMethod method);
 
+  void parseCgiResponse(const std::string& output);
+
   // ErrorPage生成用
   void makeErrorResponse(int code, const ServerConfig* config = NULL);
 
