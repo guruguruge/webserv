@@ -62,8 +62,8 @@ class RequestHandler {
   // --- Specific Features ---
 
   // CGIの実行処理 (内部で client->startCgi() を呼ぶ)
-  void _handleCgi(Client* client, const std::string& scriptPath,
-                  const LocationConfig* location);
+  int _handleCgi(Client* client, const std::string& scriptPath,
+                 const LocationConfig* location);
 
   // ディレクトリリスティング (AutoIndex) の生成
   int _generateAutoIndex(Client* client, const std::string& dirPath);

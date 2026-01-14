@@ -608,12 +608,20 @@ std::string HttpRequest::getHeader(const std::string& key) const {
   return "";
 }
 
+const std::map<std::string, std::string>& HttpRequest::getHeaders() const {
+  return _headers;
+}
+
 const std::vector<char>& HttpRequest::getBody() const {
   return _body;
 }
 
 size_t HttpRequest::getContentLength() const {
   return _contentLength;
+}
+
+std::string HttpRequest::getQuery() const {
+  return _query;
 }
 
 // =============================================================================
