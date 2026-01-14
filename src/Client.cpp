@@ -14,6 +14,7 @@
 #include "../inc/Client.hpp"
 #include <sys/epoll.h>
 #include <sys/wait.h>
+#include <csignal>
 #include <cstring>
 #include <ctime>
 #include <iostream>
