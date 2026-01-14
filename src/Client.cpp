@@ -163,6 +163,19 @@ bool setNonBlocking(int fd) {
   return true;
 }
 
+bool setCloseOnExec(int fd) {
+  if (fd < 0)
+    return false;
+
+  int flags = fcntl(fd, F_GETFD);
+  if (flags == -1)
+    return false;
+
+  if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1)
+    return false;
+  return true;
+}
+
 }  // namespace
 
 // ========================================
@@ -290,6 +303,11 @@ int Client::startCgi(const std::string& scriptPath,
     return 500;  // internal server error
   }
 
+  setCloseOnExec(pipe_in[0]);
+  setCloseOnExec(pipe_in[1]);
+  setCloseOnExec(pipe_out[0]);
+  setCloseOnExec(pipe_out[1]);
+
   _cgi_pid = fork();
   if (_cgi_pid < 0) {
     std::cerr << "[Error] fork failed: " << strerror(errno) << std::endl;
@@ -375,12 +393,7 @@ int Client::startCgi(const std::string& scriptPath,
 }
 
 void Client::finishCgi() {
-  if (_epoll && _context) {
-    _epoll->mod(_fd, _context, EPOLLOUT);
-  }
-
   res.parseCgiResponse(_cgi_output);
-
   _cleanupCgi();
   readyToWrite();
 }
