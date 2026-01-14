@@ -80,6 +80,9 @@ char** createCgiEnv(const Client& client, const std::string& realPath) {
     case GET:
       env["REQUEST_METHOD"] = "GET";
       break;
+    case HEAD:
+      env["REQUEST_METHOD"] = "HEAD";
+      break;
     case POST:
       env["REQUEST_METHOD"] = "POST";
       break;
@@ -266,8 +269,10 @@ void Client::readyToRead() {
 
 void Client::readyToCgiWrite() {
   _state = WAITING_CGI_INPUT;
-  if (_epoll && _context && _cgi_stdin_fd != -1) {
-    _epoll->add(_cgi_stdin_fd, _context, EPOLLOUT);
+  if (_epoll && _cgi_stdin_fd != -1) {
+    // CGI stdin 用の Context を作成
+    EpollContext* ctx = EpollContext::createCgiPipe(this, EpollContext::CGI_STDIN);
+    _epoll->add(_cgi_stdin_fd, ctx, EPOLLOUT);
   }
 }
 
@@ -281,8 +286,10 @@ void Client::readyToCgiRead() {
     _cgi_stdin_fd = -1;
   }
 
-  if (_epoll && _context && _cgi_stdout_fd != -1) {
-    _epoll->add(_cgi_stdout_fd, _context, EPOLLIN);
+  if (_epoll && _cgi_stdout_fd != -1) {
+    // CGI stdout 用の Context を作成
+    EpollContext* ctx = EpollContext::createCgiPipe(this, EpollContext::CGI_STDOUT);
+    _epoll->add(_cgi_stdout_fd, ctx, EPOLLIN);
   }
 }
 
@@ -395,6 +402,7 @@ int Client::startCgi(const std::string& scriptPath,
 
 void Client::finishCgi() {
   res.parseCgiResponse(_cgi_output);
+  res.build();  // レスポンスバッファを構築
   _cleanupCgi();
   readyToWrite();
 }

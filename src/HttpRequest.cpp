@@ -7,6 +7,8 @@
 static HttpMethod stringToMethod(const std::string& str) {
   if (str == "GET") {
     return GET;
+  } else if (str == "HEAD") {
+    return HEAD;
   } else if (str == "POST") {
     return POST;
   } else if (str == "DELETE") {

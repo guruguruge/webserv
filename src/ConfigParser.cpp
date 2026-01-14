@@ -434,6 +434,8 @@ void ConfigParser::_parseAllowedMethodsDirective(LocationConfig& location) {
     HttpMethod m;
     if (method == "GET") {
       m = GET;
+    } else if (method == "HEAD") {
+      m = HEAD;
     } else if (method == "POST") {
       m = POST;
     } else if (method == "DELETE") {

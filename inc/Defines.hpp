@@ -11,7 +11,7 @@
 #define DEFAULT_CLIENT_MAX_BODY_SIZE 1048576  // 1MB (1024 * 1024)
 
 // 多分これでいい
-enum HttpMethod { GET, POST, DELETE, UNKNOWN_METHOD };
+enum HttpMethod { GET, HEAD, POST, DELETE, UNKNOWN_METHOD };
 
 // クライアントの状態遷移（epollのイベント分岐に使用）
 enum ConnState {

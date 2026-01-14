@@ -412,9 +412,13 @@ void RequestHandler::handle(Client* client) {
   while (redirectCount++ < maxRedirects) {
     const HttpRequest& req = client->req;
     std::string currentUri = req.getPath();
+    
+    // リクエストメソッドをレスポンスに設定（HEADメソッド対応）
+    client->res.setRequestMethod(req.getMethod());
 
     if (!prevUri.empty() && currentUri == prevUri) {
       client->res.makeErrorResponse(508, NULL);
+      client->res.build();
       client->readyToWrite();
       return;
     }
@@ -465,6 +469,7 @@ void RequestHandler::handle(Client* client) {
     int procResult = 0;
     switch (req.getMethod()) {
       case GET:
+      case HEAD:
         procResult = _handleGet(client, realPath, matchedLocation);
         break;
       case POST:
@@ -492,6 +497,7 @@ void RequestHandler::handle(Client* client) {
     return;
   }
   client->res.makeErrorResponse(500, NULL);  // internal server error
+  client->res.build();
   client->readyToWrite();
 }
 
@@ -535,9 +541,11 @@ std::string RequestHandler::_resolvePath(const std::string& uri,
 int RequestHandler::_handleGet(Client* client, const std::string& realPath,
                                const LocationConfig* location) {
   std::string pathToFile = realPath;
+  
   if (!_isFileExist(pathToFile)) {
     return 404;  // Not found
   }
+  
   if (_isDirectory(pathToFile)) {
     std::string indexFile = "index.html";
     if (location && !location->index.empty()) {
@@ -564,6 +572,7 @@ int RequestHandler::_handleGet(Client* client, const std::string& realPath,
   }
   if (client->res.setBodyFile(pathToFile)) {
     client->res.setStatusCode(200);
+    client->res.build();
     client->readyToWrite();
     return 0;
   } else {
@@ -594,6 +603,7 @@ int RequestHandler::_handlePost(Client* client, const std::string& realPath,
   client->res.setStatusCode(201);  // Created
   client->res.setHeader("Location", client->req.getPath());
   client->res.setBody("Created");
+  client->res.build();
   client->readyToWrite();
 
   return 0;
@@ -626,6 +636,7 @@ int RequestHandler::_handleDelete(Client* client, const std::string& realPath,
     return removeResult;
   }
   client->res.setStatusCode(204);  // No Content
+  client->res.build();
   client->readyToWrite();
   return 0;
 }
@@ -653,6 +664,7 @@ int RequestHandler::_generateAutoIndex(Client* client,
   client->res.setStatusCode(200);
   client->res.setHeader("Content-Type", "text/html");
   client->res.setBody(htmlContent);
+  client->res.build();
   client->readyToWrite();
   return 0;
 }
@@ -682,6 +694,7 @@ void RequestHandler::_handleRedirection(Client* client,
   }
   client->res.makeErrorResponse(code, NULL);
   client->res.setHeader("Location", uri);
+  client->res.build();
   client->readyToWrite();
 }
 
@@ -707,6 +720,7 @@ bool RequestHandler::_handleError(Client* client, int statusCode) {
     }
   }
   client->res.makeErrorResponse(statusCode, NULL);
+  client->res.build();
   client->readyToWrite();
   return false;
 }

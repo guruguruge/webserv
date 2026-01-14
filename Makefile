@@ -5,11 +5,14 @@ INCLUDES = -I inc
 RM = rm -f
 SRCDIR = src
 SRC = \
+	$(SRCDIR)/Client.cpp \
 	$(SRCDIR)/Config.cpp \
 	$(SRCDIR)/ConfigParser.cpp \
+	$(SRCDIR)/EpollUtils.cpp \
 	$(SRCDIR)/HttpRequest.cpp \
 	$(SRCDIR)/HttpResponse.cpp \
-	main.cpp
+	$(SRCDIR)/RequestHandler.cpp \
+	$(SRCDIR)/main_new.cpp
 
 OBJDIR = obj
 OBJ = $(addprefix $(OBJDIR)/, $(SRC:.cpp=.o))

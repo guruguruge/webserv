@@ -1,0 +1,39 @@
+Welcome in this little webserver tester.
+Passing the test here is the minimum before going to an evaluation.
+
+press enter to continue
+THIS TEST IS NOT MEANT TO BE THE ONLY TEST IN THE EVALUATION!!!
+	
+press enter to continue
+Before starting please follow the next few steps (files content can be anything and will be shown to you by the test):
+- Download the cgi_test executable on the host
+- Create a directory YoupiBanane with:
+	- A file name youpi.bad_extension
+	- A file name youpi.bla
+	- A sub directory called nop
+		- A file name youpi.bad_extension in nop
+		- A file name other.pouic in nop
+	- A sub directory called Yeah
+		- A file name not_happy.bad_extension in Yeah
+press enter to continue
+Setup the configuration file as follow:
+- / must answer to GET request ONLY
+- Any file with .bla as extension must answer to POST request by calling the cgi_test executable
+- /post_body must answer anything to POST request with a maxBody of 100
+- /directory/ must answer to GET request and the root of it would be the repository YoupiBanane and if no file are requested, it should search for youpi.bad_extension files
+
+press enter to continue
+Before starting please verify that the server is launched
+press enter to continue
+
+Test GET http://localhost:8080/
+content returned: <h1>Hello from NGINX Reference!</h1>
+<p>Use this to compare headers.</p>
+
+Test POST http://localhost:8080/ with a size of 0
+
+Test HEAD http://localhost:8080/
+
+Test GET http://localhost:8080/directory
+2026/01/15 02:49:04 Unsolicited response received on idle HTTP channel starting with "<html>\r\n<head><title>405 Method Not Allowed</title></head>\r\n<body><center><h1>405 Method Not Allowed</h1></center>\r\n<hr><center>Webserv/1.0</center>\r\n</body>\r\n</html>\r\n"; err=<nil>
+FATAL ERROR ON LAST TEST: bad status code

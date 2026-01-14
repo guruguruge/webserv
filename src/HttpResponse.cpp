@@ -366,6 +366,11 @@ void HttpResponse::build() {
         }
       }
     }
+    
+    // HEAD: Content-Lengthは設定済みだがボディは送信しない
+    if (this->_requestMethod == HEAD) {
+      hasBody = false;
+    }
 
     // creates status line and response header string
     std::ostringstream ss;

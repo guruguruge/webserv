@@ -22,6 +22,7 @@
 
 #include "../inc/Client.hpp"
 #include "../inc/Config.hpp"
+#include "../inc/ConfigParser.hpp"
 #include "../inc/EpollContext.hpp"
 #include "../inc/EpollUtils.hpp"
 #include "../inc/RequestHandler.hpp"
@@ -42,7 +43,7 @@ static volatile sig_atomic_t g_running = 1;
 static void signalHandler(int sig) {
   (void)sig;
   g_running = 0;
-  std::cout << "\n🛑 Shutting down..." << std::endl;
+  std::cout << "\nShutting down..." << std::endl;
 }
 
 static bool setNonBlocking(int fd) {
@@ -64,13 +65,13 @@ static std::string getClientIp(struct sockaddr_in* addr) {
 static int createListenerSocket(int port) {
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
-    std::cerr << "❌ socket() failed: " << strerror(errno) << std::endl;
+    std::cerr << "socket() failed: " << strerror(errno) << std::endl;
     return -1;
   }
 
   int opt = 1;
   if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-    std::cerr << "❌ setsockopt() failed: " << strerror(errno) << std::endl;
+    std::cerr << "setsockopt() failed: " << strerror(errno) << std::endl;
     close(sock);
     return -1;
   }
@@ -82,25 +83,25 @@ static int createListenerSocket(int port) {
   addr.sin_port = htons(static_cast<uint16_t>(port));
 
   if (bind(sock, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
-    std::cerr << "❌ bind() failed on port " << port << ": " << strerror(errno)
+    std::cerr << "bind() failed on port " << port << ": " << strerror(errno)
               << std::endl;
     close(sock);
     return -1;
   }
 
   if (listen(sock, SOMAXCONN) < 0) {
-    std::cerr << "❌ listen() failed: " << strerror(errno) << std::endl;
+    std::cerr << "listen() failed: " << strerror(errno) << std::endl;
     close(sock);
     return -1;
   }
 
   if (!setNonBlocking(sock)) {
-    std::cerr << "❌ setNonBlocking() failed" << std::endl;
+    std::cerr << "setNonBlocking() failed" << std::endl;
     close(sock);
     return -1;
   }
 
-  std::cout << "✅ Listening on port " << port << std::endl;
+  std::cout << "Listening on port " << port << std::endl;
   return sock;
 }
 
@@ -116,13 +117,13 @@ static void handleListenerEvent(EpollContext* ctx, int listener_fd,
       listener_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &addr_len);
   if (conn_fd < 0) {
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      std::cerr << "⚠️ accept() failed: " << strerror(errno) << std::endl;
+      std::cerr << "accept() failed: " << strerror(errno) << std::endl;
     }
     return;
   }
 
   if (!setNonBlocking(conn_fd)) {
-    std::cerr << "⚠️ setNonBlocking() failed for client" << std::endl;
+    std::cerr << "setNonBlocking() failed for client" << std::endl;
     close(conn_fd);
     return;
   }
@@ -142,9 +143,6 @@ static void handleListenerEvent(EpollContext* ctx, int listener_fd,
 
   // クライアント管理マップに追加
   clients[conn_fd] = client;
-
-  std::cout << "📥 New connection from " << ip << " (fd=" << conn_fd << ")"
-            << std::endl;
 }
 
 static void handleClientReadEvent(Client* client, EpollUtils& epoll,
@@ -169,8 +167,6 @@ static void handleClientReadEvent(Client* client, EpollUtils& epoll,
     }
   } else if (n == 0) {
     // 接続終了
-    std::cout << "📤 Connection closed by client (fd=" << client->getFd() << ")"
-              << std::endl;
     epoll.del(client->getFd());
     clients.erase(client->getFd());
     delete client->getContext();
@@ -178,7 +174,7 @@ static void handleClientReadEvent(Client* client, EpollUtils& epoll,
   } else {
     // エラー
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      std::cerr << "⚠️ recv() error: " << strerror(errno) << std::endl;
+      std::cerr << "recv() error: " << strerror(errno) << std::endl;
       epoll.del(client->getFd());
       clients.erase(client->getFd());
       delete client->getContext();
@@ -189,11 +185,14 @@ static void handleClientReadEvent(Client* client, EpollUtils& epoll,
 
 static void handleClientWriteEvent(Client* client, EpollUtils& epoll,
                                    std::map<int, Client*>& clients) {
+  // std::cout << "✍️  handleClientWriteEvent called for fd=" << client->getFd() << std::endl;
   const char* data = client->res.getData();
   size_t remaining = client->res.getRemainingSize();
+  // std::cout << "📊 Remaining bytes to send: " << remaining << std::endl;
 
   if (remaining == 0) {
     // 送信完了済み
+    // std::cout << "⚠️  No data to send!" << std::endl;
     return;
   }
 
@@ -205,18 +204,23 @@ static void handleClientWriteEvent(Client* client, EpollUtils& epoll,
 
     // 全て送信完了したかチェック
     if (client->res.isDone()) {
-      // Keep-Alive チェック
-      ConnState state = client->getState();
-      if (state == KEEP_ALIVE) {
+      // Keep-Alive チェック (Connection ヘッダーを確認)
+      std::string connection = client->req.getHeader("Connection");
+      bool keepAlive = false;
+      
+      // HTTP/1.1 はデフォルトで Keep-Alive
+      if (connection.empty() || connection == "keep-alive") {
+        keepAlive = true;
+      } else if (connection == "close") {
+        keepAlive = false;
+      }
+      
+      if (keepAlive) {
         // 次のリクエストを待つ
         client->reset();
         client->readyToRead();
-        std::cout << "🔄 Keep-Alive: waiting for next request (fd="
-                  << client->getFd() << ")" << std::endl;
       } else {
         // 接続終了
-        std::cout << "📤 Response sent, closing connection (fd="
-                  << client->getFd() << ")" << std::endl;
         epoll.del(client->getFd());
         clients.erase(client->getFd());
         delete client->getContext();
@@ -226,7 +230,7 @@ static void handleClientWriteEvent(Client* client, EpollUtils& epoll,
     // まだ残りがある場合は次の EPOLLOUT を待つ
   } else if (sent < 0) {
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      std::cerr << "⚠️ send() error: " << strerror(errno) << std::endl;
+      std::cerr << "send() error: " << strerror(errno) << std::endl;
       epoll.del(client->getFd());
       clients.erase(client->getFd());
       delete client->getContext();
@@ -236,6 +240,7 @@ static void handleClientWriteEvent(Client* client, EpollUtils& epoll,
 }
 
 static void handleCgiStdoutEvent(EpollContext* ctx, EpollUtils& epoll) {
+  (void)epoll;  // 未使用パラメータ
   Client* client = ctx->client;
   char buf[RECV_BUFFER_SIZE];
   ssize_t n = read(client->getCgiStdoutFd(), buf, sizeof(buf));
@@ -244,21 +249,15 @@ static void handleCgiStdoutEvent(EpollContext* ctx, EpollUtils& epoll) {
     client->appendCgiOutput(buf, static_cast<size_t>(n));
   } else if (n == 0) {
     // CGI 完了
-    std::cout << "✅ CGI completed (fd=" << client->getFd() << ")" << std::endl;
-
-    // CGI パイプを epoll から削除
-    epoll.del(client->getCgiStdoutFd());
-
-    // Client の finishCgi() で後処理 (内部で readyToWrite() が呼ばれる)
+    // Client の finishCgi() で後処理 (内部で epoll 削除も行われる)
     client->finishCgi();
 
     // CGI 用 Context を解放
     delete ctx;
   } else {
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      std::cerr << "⚠️ CGI read error: " << strerror(errno) << std::endl;
-      epoll.del(client->getCgiStdoutFd());
-      client->finishCgi();  // エラーでも後処理
+      std::cerr << "CGI read error: " << strerror(errno) << std::endl;
+      client->finishCgi();  // エラーでも後処理（内部でepoll削除される）
       delete ctx;
     }
   }
@@ -296,7 +295,7 @@ static void handleCgiStdinEvent(EpollContext* ctx, EpollUtils& epoll) {
     // まだ残りがある場合は次の EPOLLOUT を待つ
   } else if (written < 0) {
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      std::cerr << "⚠️ CGI write error: " << strerror(errno) << std::endl;
+      std::cerr << "CGI write error: " << strerror(errno) << std::endl;
       epoll.del(client->getCgiStdinFd());
       close(client->getCgiStdinFd());
       delete ctx;
@@ -311,8 +310,6 @@ static void checkTimeouts(std::map<int, Client*>& clients, EpollUtils& epoll) {
   while (it != clients.end()) {
     Client* client = it->second;
     if (client->isTimedOut(CLIENT_TIMEOUT)) {
-      std::cout << "⏰ Client timeout (fd=" << client->getFd() << ")"
-                << std::endl;
       epoll.del(client->getFd());
       delete client->getContext();
       delete client;
@@ -337,13 +334,14 @@ static void eventLoop(EpollUtils& epoll, RequestHandler& handler,
       if (errno == EINTR) {
         continue;  // シグナル割り込み
       }
-      std::cerr << "❌ epoll_wait() failed: " << strerror(errno) << std::endl;
+      std::cerr << "epoll_wait() failed: " << strerror(errno) << std::endl;
       break;
     }
 
     // イベント処理
     for (int i = 0; i < nfds; ++i) {
       EpollContext* ctx = static_cast<EpollContext*>(events[i].data.ptr);
+
 
       switch (ctx->type) {
         case EpollContext::LISTENER: {
@@ -397,30 +395,54 @@ int main(int argc, char** argv) {
   // 設定読み込み
 
   MainConfig config;
-  // TODO: config.parse(argv[1]);
-  // 仮のデフォルト設定
-  std::cout << "📄 Loading config: " << argv[1] << std::endl;
+  
+  try {
+    ConfigParser parser(argv[1]);
+    parser.parse(config);
+  } catch (const std::exception& e) {
+    std::cerr << "Config parse error: " << e.what() << std::endl;
+    return 1;
+  }
 
   // epoll 初期化
 
   EpollUtils epoll;
 
   // Listener ソケット作成
+  // 設定ファイルから一意なポート番号を収集
 
   std::map<int, int> listener_fds;  // port -> fd
-
-  // TODO: config から複数ポートを取得
-  // 仮のデフォルトポート
-  int default_port = 8080;
-  int listener_fd = createListenerSocket(default_port);
-  if (listener_fd < 0) {
-    return 1;
+  std::vector<int> unique_ports;
+  
+  for (size_t i = 0; i < config.servers.size(); ++i) {
+    int port = config.servers[i].listen_port;
+    bool found = false;
+    for (size_t j = 0; j < unique_ports.size(); ++j) {
+      if (unique_ports[j] == port) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      unique_ports.push_back(port);
+    }
   }
-  listener_fds[default_port] = listener_fd;
 
-  // Listener を epoll に登録
-  EpollContext* listener_ctx = EpollContext::createListener(default_port);
-  epoll.add(listener_fd, listener_ctx, EPOLLIN);
+  // 各ポートでリスナーソケットを作成
+  std::vector<EpollContext*> listener_contexts;
+  for (size_t i = 0; i < unique_ports.size(); ++i) {
+    int port = unique_ports[i];
+    int listener_fd = createListenerSocket(port);
+    if (listener_fd < 0) {
+      return 1;
+    }
+    listener_fds[port] = listener_fd;
+
+    // Listener を epoll に登録
+    EpollContext* listener_ctx = EpollContext::createListener(port);
+    listener_contexts.push_back(listener_ctx);
+    epoll.add(listener_fd, listener_ctx, EPOLLIN);
+  }
 
   // RequestHandler 初期化
 
@@ -431,13 +453,9 @@ int main(int argc, char** argv) {
   std::map<int, Client*> clients;
 
   // イベントループ開始
-
-  std::cout << "🚀 Server started. Press Ctrl+C to stop." << std::endl;
   eventLoop(epoll, handler, clients, listener_fds);
 
   // クリーンアップ
-
-  std::cout << "🧹 Cleaning up..." << std::endl;
 
   // クライアント解放
   for (std::map<int, Client*>::iterator it = clients.begin();
@@ -452,8 +470,11 @@ int main(int argc, char** argv) {
        it != listener_fds.end(); ++it) {
     close(it->second);
   }
-  delete listener_ctx;
+  
+  // Listener Context 解放
+  for (size_t i = 0; i < listener_contexts.size(); ++i) {
+    delete listener_contexts[i];
+  }
 
-  std::cout << "👋 Server stopped." << std::endl;
   return 0;
 }
