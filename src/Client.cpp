@@ -489,7 +489,11 @@ void Client::_cleanupCgi() {
     _cgi_stdin_fd = -1;
   }
   if (_cgi_pid > 0) {
-    waitpid(_cgi_pid, NULL, WNOHANG);
+    int ret = waitpid(_cgi_pid, NULL, WNOHANG);
+    if (ret == 0) {
+      kill(_cgi_pid, SIGTERM);
+      waitpid(_cgi_pid, NULL, 0);
+    }
     _cgi_pid = -1;
   }
   _cgi_output.clear();
