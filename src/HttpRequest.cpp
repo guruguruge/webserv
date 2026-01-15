@@ -626,6 +626,10 @@ std::string HttpRequest::getQuery() const {
   return _query;
 }
 
+std::string HttpRequest::getHttpVersion() const {
+  return _version;
+}
+
 // =============================================================================
 // Config setters/getters
 // =============================================================================
@@ -635,6 +639,10 @@ void HttpRequest::setConfig(const ServerConfig* config) {
 
 const ServerConfig* HttpRequest::getConfig() const {
   return _config;
+}
+
+ErrorCode HttpRequest::getErrorCode() const {
+  return _error;
 }
 
 void HttpRequest::setPath(const std::string& path) {

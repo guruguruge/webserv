@@ -404,6 +404,30 @@ void RequestHandler::handle(Client* client) {
   if (!client)
     return;
 
+  // リクエストパースエラーのチェック
+  if (client->req.hasError()) {
+    ErrorCode err = client->req.getErrorCode();
+    int statusCode = 400;  // デフォルトは Bad Request
+    
+    switch (err) {
+      case ERR_HEADER_TOO_LARGE:
+        statusCode = 431;  // Request Header Fields Too Large
+        break;
+      case ERR_URI_TOO_LONG:
+        statusCode = 414;  // URI Too Long
+        break;
+      case ERR_BODY_TOO_LARGE:
+        statusCode = 413;  // Payload Too Large
+        break;
+      default:
+        statusCode = 400;  // Bad Request
+        break;
+    }
+    
+    _handleError(client, statusCode);
+    return;
+  }
+
   int redirectCount = 0;
   const int maxRedirects = 10;
   int finalStatusCode = 0;
@@ -412,7 +436,7 @@ void RequestHandler::handle(Client* client) {
   while (redirectCount++ < maxRedirects) {
     const HttpRequest& req = client->req;
     std::string currentUri = req.getPath();
-    
+
     // リクエストメソッドをレスポンスに設定（HEADメソッド対応）
     client->res.setRequestMethod(req.getMethod());
 
@@ -541,11 +565,11 @@ std::string RequestHandler::_resolvePath(const std::string& uri,
 int RequestHandler::_handleGet(Client* client, const std::string& realPath,
                                const LocationConfig* location) {
   std::string pathToFile = realPath;
-  
+
   if (!_isFileExist(pathToFile)) {
     return 404;  // Not found
   }
-  
+
   if (_isDirectory(pathToFile)) {
     std::string indexFile = "index.html";
     if (location && !location->index.empty()) {

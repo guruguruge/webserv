@@ -99,8 +99,10 @@ class HttpRequest {
   const std::vector<char>& getBody() const;
   size_t getContentLength() const;
   std::string getQuery() const;
+  std::string getHttpVersion() const;
   void setConfig(const ServerConfig* config);
   const ServerConfig* getConfig() const;
+  ErrorCode getErrorCode() const;
 
   void setPath(const std::string& path);
 };

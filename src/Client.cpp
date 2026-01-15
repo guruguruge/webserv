@@ -271,7 +271,8 @@ void Client::readyToCgiWrite() {
   _state = WAITING_CGI_INPUT;
   if (_epoll && _cgi_stdin_fd != -1) {
     // CGI stdin 用の Context を作成
-    EpollContext* ctx = EpollContext::createCgiPipe(this, EpollContext::CGI_STDIN);
+    EpollContext* ctx =
+        EpollContext::createCgiPipe(this, EpollContext::CGI_STDIN);
     _epoll->add(_cgi_stdin_fd, ctx, EPOLLOUT);
   }
 }
@@ -288,7 +289,8 @@ void Client::readyToCgiRead() {
 
   if (_epoll && _cgi_stdout_fd != -1) {
     // CGI stdout 用の Context を作成
-    EpollContext* ctx = EpollContext::createCgiPipe(this, EpollContext::CGI_STDOUT);
+    EpollContext* ctx =
+        EpollContext::createCgiPipe(this, EpollContext::CGI_STDOUT);
     _epoll->add(_cgi_stdout_fd, ctx, EPOLLIN);
   }
 }

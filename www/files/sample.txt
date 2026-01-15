@@ -1,0 +1,11 @@
+This is a sample text file for testing file serving.
+
+Webserv - HTTP/1.1 Server
+C++98 Implementation
+
+Features:
+- Static file serving
+- CGI support
+- File upload/delete
+- Directory listing
+- Keep-alive connections

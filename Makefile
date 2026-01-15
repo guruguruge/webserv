@@ -12,7 +12,7 @@ SRC = \
 	$(SRCDIR)/HttpRequest.cpp \
 	$(SRCDIR)/HttpResponse.cpp \
 	$(SRCDIR)/RequestHandler.cpp \
-	$(SRCDIR)/main_new.cpp
+	$(SRCDIR)/main.cpp
 
 OBJDIR = obj
 OBJ = $(addprefix $(OBJDIR)/, $(SRC:.cpp=.o))

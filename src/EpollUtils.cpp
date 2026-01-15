@@ -1,14 +1,15 @@
 #include "../inc/EpollUtils.hpp"
 #include <unistd.h>
-#include <cstdio>
 #include <cstring>
+#include <cerrno>
+#include <iostream>
 #include <new>
 #include <stdexcept>
 
 EpollUtils::EpollUtils() {
   this->_epoll_fd = epoll_create(1);
   if (this->_epoll_fd < 0) {
-    perror("epoll_create");
+    std::cerr << "epoll_create failed: " << strerror(errno) << std::endl;
     throw std::runtime_error("Failed to create epoll instance");
   }
 }
@@ -25,7 +26,7 @@ bool EpollUtils::add(int fd, EpollContext* ctx, uint32_t events) {
   ev.data.ptr = ctx;
 
   if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
-    perror("epoll_ctl: add");
+    std::cerr << "epoll_ctl (add) failed: " << strerror(errno) << std::endl;
     return false;
   }
   return true;
@@ -39,7 +40,7 @@ bool EpollUtils::mod(int fd, EpollContext* ctx, uint32_t events) {
   ev.data.ptr = ctx;
 
   if (epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
-    perror("epoll_ctl: mod");
+    std::cerr << "epoll_ctl (mod) failed: " << strerror(errno) << std::endl;
     return false;
   }
   return true;
@@ -47,7 +48,7 @@ bool EpollUtils::mod(int fd, EpollContext* ctx, uint32_t events) {
 
 bool EpollUtils::del(int fd) {
   if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, fd, NULL) < 0) {
-    perror("epoll_ctl: del");
+    std::cerr << "epoll_ctl (del) failed: " << strerror(errno) << std::endl;
     return false;
   }
   return true;
